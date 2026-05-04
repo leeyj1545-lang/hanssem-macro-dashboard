@@ -23,41 +23,41 @@ yoy AS (
     SAFE_DIVIDE(unsold_units - LAG(unsold_units, 12) OVER (ORDER BY date), LAG(unsold_units, 12) OVER (ORDER BY date)) * 100 AS unsold_yoy
   FROM base
 ),
-hmi AS (
+scored AS (
   SELECT
     *,
-    (price_yoy * 0.4 + completion_yoy * 0.3 - unsold_yoy * 0.3) AS hmi
+    CASE
+      WHEN completion_yoy IS NULL OR unsold_yoy IS NULL THEN NULL
+      ELSE (price_yoy * 0.4 + completion_yoy * 0.3 - unsold_yoy * 0.3)
+    END AS hmi
   FROM yoy
 ),
 labeled AS (
   SELECT
-    *,
+    s.*,
     CASE
-      WHEN hmi >= 1.0 THEN 'strong_positive'
-      WHEN hmi >= 0.3 THEN 'positive'
-      WHEN hmi > -0.3 THEN 'neutral'
-      WHEN hmi > -1.0 THEN 'negative'
+      WHEN s.hmi IS NULL THEN 'not_ready'
+      WHEN s.hmi >= 1.0 THEN 'strong_positive'
+      WHEN s.hmi >= 0.3 THEN 'positive'
+      WHEN s.hmi > -0.3 THEN 'neutral'
+      WHEN s.hmi > -1.0 THEN 'negative'
       ELSE 'strong_negative'
     END AS signal,
     CASE
-      WHEN hmi >= 1.0 THEN '회복 가속'
-      WHEN hmi >= 0.3 THEN '회복'
-      WHEN hmi > -0.3 THEN '혼조'
-      WHEN hmi > -1.0 THEN '둔화'
-      ELSE '침체'
+      WHEN s.hmi IS NULL THEN 'not_ready'
+      WHEN s.hmi >= 0.3 THEN 'recovery'
+      WHEN s.hmi <= -0.3 THEN 'slowdown'
+      ELSE 'mixed'
     END AS market_phase,
     CASE
-      WHEN price_yoy > 0 AND completion_yoy > 0 AND unsold_yoy < 0
-        THEN '실수요 기반 시장 회복 -> 강한 매출 기회 구간'
-      WHEN price_yoy > 0 AND unsold_yoy > 0
-        THEN '가격 상승 대비 미분양 누적 -> 제한적 매출 성장 구간'
-      WHEN price_yoy < 0 AND unsold_yoy > 0
-        THEN '시장 침체와 재고 증가 동반 -> 매출 하방 리스크 구간'
-      WHEN completion_yoy > 0 AND unsold_yoy < 0 AND jeonse_yoy > 0
-        THEN '입주 확대와 미분양 해소, 전세 강세 동반 -> 주거 이동 수요 우호 구간'
-      ELSE '시장 신호 혼조 -> 지역별 전략 대응 필요'
+      WHEN s.hmi IS NULL THEN 'Macro dataset is not ready because supply or risk indicators are still missing.'
+      WHEN s.price_yoy > 0 AND s.completion_yoy > 0 AND s.unsold_yoy < 0 THEN 'Demand-led recovery with healthy supply and lower unsold inventory.'
+      WHEN s.price_yoy > 0 AND s.unsold_yoy > 0 THEN 'Price strength is offset by rising unsold inventory.'
+      WHEN s.price_yoy < 0 AND s.unsold_yoy > 0 THEN 'Weak pricing and rising unsold inventory imply downside risk.'
+      WHEN s.completion_yoy > 0 AND s.unsold_yoy < 0 AND s.jeonse_yoy > 0 THEN 'Move-in demand and lower unsold inventory support housing activity.'
+      ELSE 'Mixed macro signals require selective execution.'
     END AS insight_text
-  FROM hmi
+  FROM scored s
 )
 SELECT
   date,

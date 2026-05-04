@@ -59,9 +59,9 @@ def run_demo() -> int:
     return 0
 
 
-def run_live() -> int:
+def run_live(selected_indicators: list[str] | None = None) -> int:
     initialize_database(DB_PATH)
-    effective_status = load_effective_statuses()
+    effective_status = load_effective_statuses(selected_indicators=selected_indicators)
     log_path = build_log_path()
     started_at = datetime.now()
     batch_id = started_at.strftime("%Y%m%d%H%M%S")
@@ -69,7 +69,11 @@ def run_live() -> int:
     had_failures = False
 
     try:
-        rows_by_indicator, had_failures = collect_live_rows(effective_status=effective_status, summary_rows=summary_rows)
+        rows_by_indicator, had_failures = collect_live_rows(
+            effective_status=effective_status,
+            summary_rows=summary_rows,
+            selected_indicators=selected_indicators,
+        )
         staged_result = stage_and_promote(batch_id=batch_id, rows_by_indicator=rows_by_indicator, summary_rows=summary_rows)
         had_failures = had_failures or staged_result
         for row in summary_rows:
@@ -111,12 +115,12 @@ def run_live() -> int:
     return 1 if had_failures else 0
 
 
-def run_bigquery() -> int:
+def run_bigquery(selected_indicators: list[str] | None = None) -> int:
     if not (BIGQUERY_PROJECT_ID and BIGQUERY_DATASET):
         print("BQ_PROJECT_ID/BQ_DATASET or BIGQUERY_PROJECT_ID/BIGQUERY_DATASET is missing.", file=sys.stderr)
         return 1
 
-    effective_status = load_effective_statuses()
+    effective_status = load_effective_statuses(selected_indicators=selected_indicators)
     log_path = build_log_path()
     started_at = datetime.now()
     run_id = started_at.strftime("%Y%m%d%H%M%S")
@@ -124,7 +128,11 @@ def run_bigquery() -> int:
     had_failures = False
 
     try:
-        rows_by_indicator, had_failures = collect_live_rows(effective_status=effective_status, summary_rows=summary_rows)
+        rows_by_indicator, had_failures = collect_live_rows(
+            effective_status=effective_status,
+            summary_rows=summary_rows,
+            selected_indicators=selected_indicators,
+        )
         bq_write_source_verification(project_id=BIGQUERY_PROJECT_ID, dataset=BIGQUERY_DATASET)
         had_failures = stage_and_promote_bigquery(
             run_id=run_id,
@@ -162,10 +170,12 @@ def run_bigquery() -> int:
     return 1 if had_failures else 0
 
 
-def load_effective_statuses() -> dict[str, str]:
+def load_effective_statuses(selected_indicators: list[str] | None = None) -> dict[str, str]:
     overrides = load_verification_overrides()
     statuses: dict[str, str] = {}
-    for indicator_id, definition in INDICATORS.items():
+    target_ids = selected_indicators or list(INDICATORS.keys())
+    for indicator_id in target_ids:
+        definition = INDICATORS[indicator_id]
         statuses[indicator_id] = overrides.get(indicator_id, {}).get(
             "verification_status",
             definition.source_detail.verification_status,
@@ -182,11 +192,17 @@ def load_candidate_params() -> dict[str, dict[str, str]]:
     }
 
 
-def collect_live_rows(effective_status: dict[str, str], summary_rows: list[dict]) -> tuple[dict[str, list[dict]], bool]:
+def collect_live_rows(
+    effective_status: dict[str, str],
+    summary_rows: list[dict],
+    selected_indicators: list[str] | None = None,
+) -> tuple[dict[str, list[dict]], bool]:
     overrides = load_verification_overrides()
     verified_by_source: dict[str, list[str]] = defaultdict(list)
     had_failures = False
-    for indicator_id, definition in INDICATORS.items():
+    target_ids = selected_indicators or list(INDICATORS.keys())
+    for indicator_id in target_ids:
+        definition = INDICATORS[indicator_id]
         status = effective_status.get(indicator_id, "pending")
         if status == "verified":
             verified_by_source[definition.source].append(indicator_id)
@@ -611,15 +627,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Hanssem macro ETL runner")
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("demo", help="Load demo rows into SQLite")
-    subparsers.add_parser("run", help="Run live API ETL")
-    subparsers.add_parser("run-bq", help="Run live ETL directly into BigQuery staging/production")
+    run_parser = subparsers.add_parser("run", help="Run live API ETL")
+    run_parser.add_argument("--indicator", dest="indicators", action="append", choices=sorted(INDICATORS.keys()))
+    run_bq_parser = subparsers.add_parser("run-bq", help="Run live ETL directly into BigQuery staging/production")
+    run_bq_parser.add_argument("--indicator", dest="indicators", action="append", choices=sorted(INDICATORS.keys()))
     args = parser.parse_args()
 
     if args.command == "demo":
         return run_demo()
     if args.command == "run-bq":
-        return run_bigquery()
-    return run_live()
+        return run_bigquery(selected_indicators=args.indicators)
+    return run_live(selected_indicators=getattr(args, "indicators", None))
 
 
 if __name__ == "__main__":

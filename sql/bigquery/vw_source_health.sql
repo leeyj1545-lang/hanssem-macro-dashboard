@@ -5,7 +5,7 @@ SELECT
   provider,
   verification_status,
   error_type,
-  rows,
+  row_count,
   last_verified_at,
   message,
   CASE

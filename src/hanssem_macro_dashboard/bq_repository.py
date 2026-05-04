@@ -49,7 +49,9 @@ def validate_staging(
     job_config = bigquery.QueryJobConfig(
         query_parameters=[bigquery.ScalarQueryParameter("run_id", "STRING", run_id)]
     )
-    result = client.query(sql, job_config=job_config, location=BIGQUERY_LOCATION).to_dataframe()
+    query_job = client.query(sql, job_config=job_config, location=BIGQUERY_LOCATION)
+    rows = [dict(row.items()) for row in query_job.result()]
+    result = pd.DataFrame(rows)
     if result.empty:
         return pd.DataFrame(
             columns=[
@@ -118,6 +120,12 @@ def write_etl_run_history(
     history = rows.copy() if isinstance(rows, pd.DataFrame) else pd.DataFrame(rows)
     if history.empty:
         return 0
+    if "latest_period" in history.columns:
+        history["latest_period"] = pd.to_datetime(history["latest_period"], errors="coerce").dt.date
+    if "started_at" in history.columns:
+        history["started_at"] = pd.to_datetime(history["started_at"], errors="coerce")
+    if "finished_at" in history.columns:
+        history["finished_at"] = pd.to_datetime(history["finished_at"], errors="coerce")
     destination = table_id("etl_run_history", project_id=project_id, dataset=dataset)
     load_to_bq(history, destination, project_id=project_id, write_disposition="WRITE_APPEND")
     return len(history)

@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS `{{project}}.{{dataset}}.macro_indicator_observations
   source STRING,
   created_at TIMESTAMP
 )
-PARTITION BY DATE(date)
+PARTITION BY date
 CLUSTER BY indicator_id, region;
 
 CREATE TABLE IF NOT EXISTS `{{project}}.{{dataset}}.staging_macro_indicator_observations` (
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS `{{project}}.{{dataset}}.staging_macro_indicator_obse
   source STRING,
   loaded_at TIMESTAMP
 )
-PARTITION BY DATE(date)
+PARTITION BY date
 CLUSTER BY run_id, indicator_id, region;
 
 CREATE TABLE IF NOT EXISTS `{{project}}.{{dataset}}.source_verification` (
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS `{{project}}.{{dataset}}.source_verification` (
   provider STRING,
   verification_status STRING,
   error_type STRING,
-  rows INT64,
+  row_count INT64,
   last_verified_at TIMESTAMP,
   message STRING
 );
@@ -56,5 +56,5 @@ CREATE TABLE IF NOT EXISTS `{{project}}.{{dataset}}.hanssem_sales_monthly` (
   category STRING,
   region STRING
 )
-PARTITION BY DATE(date)
+PARTITION BY date
 CLUSTER BY category, region;

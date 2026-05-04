@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 from typing import Iterable
 
@@ -25,9 +26,15 @@ def processed_path_for(indicator_id: str) -> Path:
 
 
 class MolitStatFileSource:
-    def __init__(self, indicator_ids: list[str] | None = None, timeout: int = 30):
+    def __init__(
+        self,
+        indicator_ids: list[str] | None = None,
+        timeout: int = 30,
+        retry_delays: list[int] | None = None,
+    ):
         self.indicator_ids = indicator_ids or ["completion_volume"]
         self.timeout = timeout
+        self.retry_delays = retry_delays or [5, 15, 30]
 
     def fetch(self) -> Iterable[dict]:
         rows: list[dict] = []
@@ -58,7 +65,7 @@ class MolitStatFileSource:
 
     def fetch_file_catalog(self, h_rs_id: str, h_form_id: str) -> list[dict]:
         params = {"hRsId": h_rs_id, "hFormId": h_form_id}
-        response = requests.get(MOLIT_META_URL, params=params, timeout=self.timeout)
+        response = self.request_with_retry(MOLIT_META_URL, params=params)
         response.raise_for_status()
         matches = re.findall(r"downFile\('([^']+)','([^']+)','([^']+)','([^']+)'\)", response.text)
         return [
@@ -108,7 +115,7 @@ class MolitStatFileSource:
             "rFileName": entry["real_name"],
             "midpath": entry["midpath"],
         }
-        response = requests.get(MOLIT_DOWNLOAD_URL, params=params, timeout=self.timeout)
+        response = self.request_with_retry(MOLIT_DOWNLOAD_URL, params=params)
         response.raise_for_status()
         content_type = response.headers.get("content-type", "")
         if "text/html" in content_type and "파일이없습니다" in response.text:
@@ -117,6 +124,19 @@ class MolitStatFileSource:
         path = directory / entry["real_name"]
         path.write_bytes(response.content)
         return path
+
+    def request_with_retry(self, url: str, params: dict) -> requests.Response:
+        errors: list[str] = []
+        total_attempts = len(self.retry_delays) + 1
+        for attempt in range(total_attempts):
+            try:
+                return requests.get(url, params=params, timeout=self.timeout)
+            except (requests.RequestException, TimeoutError, ConnectionResetError) as exc:
+                errors.append(f"attempt={attempt + 1}: {exc!r}")
+                if attempt >= len(self.retry_delays):
+                    raise SourceError("; ".join(errors)) from exc
+                time.sleep(self.retry_delays[attempt])
+        raise SourceError("; ".join(errors))
 
     def parse_indicator_workbook(self, indicator_id: str, path: Path) -> pd.DataFrame:
         if path.suffix.lower() != ".xlsx":

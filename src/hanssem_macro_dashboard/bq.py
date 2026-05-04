@@ -46,7 +46,11 @@ def table_id(table_name: str, project_id: str | None = None, dataset: str | None
 
 def render_sql(template_name: str, project_id: str | None = None, dataset: str | None = None) -> str:
     content = (SQL_DIR / template_name).read_text(encoding="utf-8")
-    return content.replace("{{project}}", project_id or BIGQUERY_PROJECT_ID).replace("{{dataset}}", dataset or BIGQUERY_DATASET)
+    return (
+        content.replace("{{project}}", project_id or BIGQUERY_PROJECT_ID)
+        .replace("{{dataset}}", dataset or BIGQUERY_DATASET)
+        .replace("{{location}}", BIGQUERY_LOCATION)
+    )
 
 
 def execute_sql(client, sql: str) -> None:
@@ -168,7 +172,7 @@ def build_source_verification_dataframe() -> pd.DataFrame:
                 "provider": definition.source_detail.provider,
                 "verification_status": override.get("verification_status", definition.source_detail.verification_status),
                 "error_type": override.get("error_type", definition.source_detail.error_type),
-                "rows": int(override.get("rows", definition.source_detail.rows) or 0),
+                "row_count": int(override.get("rows", definition.source_detail.rows) or 0),
                 "last_verified_at": _to_timestamp(override.get("last_verified_at", definition.source_detail.last_verified_at)),
                 "message": override.get("verification_message", definition.source_detail.verification_message),
             }
@@ -184,7 +188,7 @@ def build_source_verification_dataframe() -> pd.DataFrame:
                         definition.fallback_source.verification_status,
                     ),
                     "error_type": override.get("fallback_error_type", definition.fallback_source.error_type),
-                    "rows": int(override.get("fallback_rows", definition.fallback_source.rows) or 0),
+                    "row_count": int(override.get("fallback_rows", definition.fallback_source.rows) or 0),
                     "last_verified_at": _to_timestamp(
                         override.get("fallback_last_verified_at", definition.fallback_source.last_verified_at)
                     ),
