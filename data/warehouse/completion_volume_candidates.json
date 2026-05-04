@@ -1,0 +1,113 @@
+[
+  {
+    "candidate_id": "kosis_dt_mltm_5372",
+    "provider": "KOSIS",
+    "org_id": "116",
+    "table_id": "DT_MLTM_5372",
+    "table_name": "???? ????(??)",
+    "frequency": "M",
+    "period_type": "??",
+    "region_dimension": true,
+    "item_dimension": false,
+    "confidence": "high",
+    "status": "next_probe",
+    "notes": "KOSIS ??????? KOSIS Q&A?? ?? ?? ?? ?? ???. ?? ?? completion_volume ?? ?? ??? ?? ?? ??.",
+    "source_links": [
+      "https://kosis.kr/serviceInfo/newContrainDataDetail.do?boardIdx=2002017&boardOrgId=116",
+      "https://kosis.kr/civilComplaint/qnaDetail.do?boardIdx=22945",
+      "https://stat.molit.go.kr/portal/cate/statView.do?hFormId=5372&hRsId=468"
+    ]
+  },
+  {
+    "candidate_id": "kosis_dt_mltm_5373",
+    "provider": "KOSIS",
+    "org_id": "116",
+    "table_id": "DT_MLTM_5373",
+    "table_name": "????? ???? ????(??)",
+    "frequency": "M",
+    "period_type": "??",
+    "region_dimension": false,
+    "item_dimension": true,
+    "confidence": "high",
+    "status": "next_probe",
+    "notes": "KOSIS Q&A? ??? ?????? ?? ?? ?? ???. ??? ?? ?? API ?? ??? ?? ??? ??.",
+    "source_links": [
+      "https://kosis.kr/serviceInfo/newContrainDataDetail.do?boardIdx=2002017&boardOrgId=116",
+      "https://kosis.kr/civilComplaint/qnaDetail.do?boardIdx=22945",
+      "https://stat.molit.go.kr/portal/cate/statView.do?hFormId=5373&hRsId=468"
+    ]
+  },
+  {
+    "candidate_id": "kosis_dt_mltm_5374",
+    "provider": "KOSIS",
+    "org_id": "116",
+    "table_id": "DT_MLTM_5374",
+    "table_name": "????? ???? ????(??)",
+    "frequency": "M",
+    "period_type": "??",
+    "region_dimension": true,
+    "item_dimension": true,
+    "confidence": "medium",
+    "status": "hold_pending_condition_check",
+    "notes": "?? ??? ?? ??? objL1/objL2?? ???? rows=0. ?? ??? ??.",
+    "source_links": [
+      "https://kosis.kr/serviceInfo/newContrainDataDetail.do?boardIdx=2002017&boardOrgId=116",
+      "https://kosis.kr/civilComplaint/qnaDetail.do?boardIdx=22945",
+      "https://stat.molit.go.kr/portal/cate/statView.do?hFormId=5374&hRsId=468"
+    ]
+  },
+  {
+    "candidate_id": "molit_completion_hRs468_hForm5372",
+    "provider": "???? ????",
+    "org_id": "",
+    "table_id": "hRsId=468&hFormId=5372",
+    "table_name": "????????(??) / ???? ????(??)",
+    "frequency": "M",
+    "period_type": "??",
+    "region_dimension": true,
+    "item_dimension": false,
+    "confidence": "high",
+    "status": "download_fallback",
+    "notes": "???? ???? ???? ?? ??? ?? ??, ?? ??/CSV/TXT ?? ??? ???. API? ??? ?? ???? ETL ?? ??? ??.",
+    "source_links": [
+      "https://stat.molit.go.kr/portal/cate/statMetaView.do?hRsId=468",
+      "https://stat.molit.go.kr/portal/cate/statView.do?hFormId=5372&hRsId=468"
+    ]
+  },
+  {
+    "candidate_id": "molit_completion_hRs468_hForm5373",
+    "provider": "???? ????",
+    "org_id": "",
+    "table_id": "hRsId=468&hFormId=5373",
+    "table_name": "????????(??) / ????? ???? ????(??)",
+    "frequency": "M",
+    "period_type": "??",
+    "region_dimension": false,
+    "item_dimension": true,
+    "confidence": "medium",
+    "status": "download_fallback",
+    "notes": "??? ?? ?? ?. ?? ????? ??? ?? ??? ??.",
+    "source_links": [
+      "https://stat.molit.go.kr/portal/cate/statMetaView.do?hRsId=468",
+      "https://stat.molit.go.kr/portal/cate/statView.do?hFormId=5373&hRsId=468"
+    ]
+  },
+  {
+    "candidate_id": "molit_completion_hRs468_hForm5374",
+    "provider": "???? ????",
+    "org_id": "",
+    "table_id": "hRsId=468&hFormId=5374",
+    "table_name": "????????(??) / ????? ???? ????(??)",
+    "frequency": "M",
+    "period_type": "??",
+    "region_dimension": true,
+    "item_dimension": true,
+    "confidence": "medium",
+    "status": "download_fallback",
+    "notes": "KOSIS 5374? ???? ??? ?. API ?? ???? ?? ETL? ??? ? ??.",
+    "source_links": [
+      "https://stat.molit.go.kr/portal/cate/statMetaView.do?hRsId=468",
+      "https://stat.molit.go.kr/portal/cate/statView.do?hFormId=5374&hRsId=468"
+    ]
+  }
+]

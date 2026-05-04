@@ -1,0 +1,45 @@
+[
+  {
+    "candidate_id": "rone_sale_price_api",
+    "indicator_id": "sale_price_index",
+    "provider": "R-ONE",
+    "source_type": "open_api",
+    "service_code": "SttsApiTblData.do",
+    "statbl_id": "A_2024_00178",
+    "table_name": "(월) 지역별 매매지수_아파트",
+    "item_name": "지수",
+    "frequency": "M",
+    "period_type": "월간 지수",
+    "region_dimension": true,
+    "item_dimension": true,
+    "confidence": "high"
+  },
+  {
+    "candidate_id": "rone_jeonse_price_api",
+    "indicator_id": "jeonse_price_index",
+    "provider": "R-ONE",
+    "source_type": "open_api",
+    "service_code": "SttsApiTblData.do",
+    "statbl_id": "A_2024_00182",
+    "table_name": "(월) 지역별 전세지수_아파트",
+    "item_name": "지수",
+    "frequency": "M",
+    "period_type": "월간 지수",
+    "region_dimension": true,
+    "item_dimension": true,
+    "confidence": "high"
+  },
+  {
+    "candidate_id": "rone_monthly_report_excel",
+    "indicator_id": "sale_price_index,jeonse_price_index",
+    "provider": "R-ONE",
+    "source_type": "file_download",
+    "table_name": "전국주택가격동향조사 월간 공표 엑셀",
+    "item_name": "매매가격지수/전세가격지수",
+    "frequency": "M",
+    "period_type": "월간 지수",
+    "region_dimension": true,
+    "item_dimension": true,
+    "confidence": "medium"
+  }
+]

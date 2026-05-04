@@ -1,0 +1,191 @@
+[
+  {
+    "OBJ_ID": "ITEM",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "항목",
+    "ITM_NM": "주택건설실적",
+    "ITM_ID": "13103871094T1",
+    "OBJ_NM_ENG": "Item code list"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Whole country",
+    "ITM_NM": "전국",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0002"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Seoul",
+    "ITM_NM": "서울특별시",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0003"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Busan",
+    "ITM_NM": "부산광역시",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0006"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Daegu",
+    "ITM_NM": "대구광역시",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0007"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Incheon",
+    "ITM_NM": "인천광역시",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0004"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Gwangju",
+    "ITM_NM": "광주광역시",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0008"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Daejeon",
+    "ITM_NM": "대전광역시",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0009"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Ulsan",
+    "ITM_NM": "울산광역시",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0010"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Sejong",
+    "ITM_NM": "세종특별자치시",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0011"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Gyeonggi-do",
+    "ITM_NM": "경기도",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0005"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Gangwon-do",
+    "ITM_NM": "강원특별자치도",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0012"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Chungcheongbuk-do",
+    "ITM_NM": "충청북도",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0013"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Chungcheongnam-do",
+    "ITM_NM": "충청남도",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0014"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Jeollabuk-do",
+    "ITM_NM": "전북특별자치도",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0015"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Jeollanam-do",
+    "ITM_NM": "전라남도",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0016"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Gyeongsangbuk-do",
+    "ITM_NM": "경상북도",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0017"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Gyeongsangnam-do",
+    "ITM_NM": "경상남도",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0018"
+  },
+  {
+    "OBJ_ID": "13101871094A",
+    "TBL_ID": "DT_1YL7501E",
+    "ORG_ID": "101",
+    "OBJ_NM": "행정구역별",
+    "ITM_NM_ENG": "Jeju",
+    "ITM_NM": "제주특별자치도",
+    "OBJ_ID_SN": "1",
+    "ITM_ID": "13102871094A.0019"
+  }
+]

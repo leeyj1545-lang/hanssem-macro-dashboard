@@ -1,0 +1,60 @@
+[SKIP] indicator_id=sale_price_index source=R-ONE stage_status=skipped rows_inserted=0 latest_period= message=verification_status=pending
+[SKIP] indicator_id=jeonse_price_index source=R-ONE stage_status=skipped rows_inserted=0 latest_period= message=verification_status=pending
+[SKIP] indicator_id=housing_permits source=KOSIS stage_status=skipped rows_inserted=0 latest_period= message=verification_status=failed_empty
+[SKIP] indicator_id=unsold_units source=MOLIT_STAT stage_status=skipped rows_inserted=0 latest_period= message=verification_status=pending
+[FAILED] indicator_id=base_rate source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=mortgage_rate source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=consumer_sentiment source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=household_loan_balance source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=apt_trade_volume source=MOLIT stage_status=not_staged rows_inserted=0 latest_period= message=DATA_GO_KR_API_KEY is missing.
+[FAILED] indicator_id=apt_rent_volume source=MOLIT stage_status=not_staged rows_inserted=0 latest_period= message=DATA_GO_KR_API_KEY is missing.
+[COLLECTED] indicator_id=completion_volume source=MOLIT_STAT_FILE stage_status=production_loaded rows_inserted=252 latest_period=2025-12-01 message=staged_rows=252; staging validation passed
+[FAILED] inserted_rows=252
+[SKIP] indicator_id=sale_price_index source=R-ONE stage_status=skipped rows_inserted=0 latest_period= message=verification_status=pending
+[SKIP] indicator_id=jeonse_price_index source=R-ONE stage_status=skipped rows_inserted=0 latest_period= message=verification_status=pending
+[SKIP] indicator_id=housing_permits source=KOSIS stage_status=skipped rows_inserted=0 latest_period= message=verification_status=failed_empty
+[FAILED] indicator_id=base_rate source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=mortgage_rate source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=consumer_sentiment source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=household_loan_balance source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=apt_trade_volume source=MOLIT stage_status=not_staged rows_inserted=0 latest_period= message=DATA_GO_KR_API_KEY is missing.
+[FAILED] indicator_id=apt_rent_volume source=MOLIT stage_status=not_staged rows_inserted=0 latest_period= message=DATA_GO_KR_API_KEY is missing.
+[COLLECTED] indicator_id=completion_volume source=MOLIT_STAT_FILE stage_status=production_loaded rows_inserted=252 latest_period=2025-12-01 message=staged_rows=252; staging validation passed
+[COLLECTED] indicator_id=unsold_units source=MOLIT_STAT_FILE stage_status=production_loaded rows_inserted=120 latest_period=2026-03-01 message=staged_rows=120; staging validation passed
+[FAILED] inserted_rows=372
+[SKIP] indicator_id=sale_price_index source=R-ONE stage_status=skipped rows_inserted=0 latest_period= message=verification_status=pending
+[SKIP] indicator_id=jeonse_price_index source=R-ONE stage_status=skipped rows_inserted=0 latest_period= message=verification_status=pending
+[FAILED] indicator_id=base_rate source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=mortgage_rate source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=consumer_sentiment source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=household_loan_balance source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=apt_trade_volume source=MOLIT stage_status=not_staged rows_inserted=0 latest_period= message=DATA_GO_KR_API_KEY is missing.
+[FAILED] indicator_id=apt_rent_volume source=MOLIT stage_status=not_staged rows_inserted=0 latest_period= message=DATA_GO_KR_API_KEY is missing.
+[COLLECTED] indicator_id=completion_volume source=MOLIT_STAT_FILE stage_status=production_loaded rows_inserted=252 latest_period=2025-12-01 message=staged_rows=252; staging validation passed
+[FAILED_STAGING] indicator_id=housing_permits source=MOLIT_STAT_FILE stage_status=failed_staging rows_inserted=0 latest_period=2099-12-01 message=latest_period out of expected range: 2099-12-01
+[FAILED_STAGING] indicator_id=unsold_units source=MOLIT_STAT_FILE stage_status=failed_staging rows_inserted=0 latest_period=2026-03-01 message=duplicate staging keys detected: 7
+[FAILED] inserted_rows=252
+[SKIP] indicator_id=sale_price_index source=R-ONE stage_status=skipped rows_inserted=0 latest_period= message=verification_status=pending
+[SKIP] indicator_id=jeonse_price_index source=R-ONE stage_status=skipped rows_inserted=0 latest_period= message=verification_status=pending
+[FAILED] indicator_id=base_rate source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=mortgage_rate source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=consumer_sentiment source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=household_loan_balance source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=apt_trade_volume source=MOLIT stage_status=not_staged rows_inserted=0 latest_period= message=DATA_GO_KR_API_KEY is missing.
+[FAILED] indicator_id=apt_rent_volume source=MOLIT stage_status=not_staged rows_inserted=0 latest_period= message=DATA_GO_KR_API_KEY is missing.
+[COLLECTED] indicator_id=completion_volume source=MOLIT_STAT_FILE stage_status=production_loaded rows_inserted=252 latest_period=2025-12-01 message=staged_rows=252; staging validation passed
+[COLLECTED] indicator_id=housing_permits source=MOLIT_STAT_FILE stage_status=production_loaded rows_inserted=432 latest_period=2025-12-01 message=staged_rows=432; staging validation passed
+[COLLECTED] indicator_id=unsold_units source=MOLIT_STAT_FILE stage_status=production_loaded rows_inserted=111 latest_period=2026-03-01 message=staged_rows=111; staging validation passed
+[FAILED] inserted_rows=795
+[FAILED] indicator_id=base_rate source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=mortgage_rate source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=consumer_sentiment source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=household_loan_balance source=ECOS stage_status=not_staged rows_inserted=0 latest_period= message=ECOS_API_KEY is missing.
+[FAILED] indicator_id=apt_trade_volume source=MOLIT stage_status=not_staged rows_inserted=0 latest_period= message=DATA_GO_KR_API_KEY is missing.
+[FAILED] indicator_id=apt_rent_volume source=MOLIT stage_status=not_staged rows_inserted=0 latest_period= message=DATA_GO_KR_API_KEY is missing.
+[COLLECTED] indicator_id=completion_volume source=MOLIT_STAT_FILE stage_status=production_loaded rows_inserted=252 latest_period=2025-12-01 message=staged_rows=252; staging validation passed
+[COLLECTED] indicator_id=housing_permits source=MOLIT_STAT_FILE stage_status=production_loaded rows_inserted=432 latest_period=2025-12-01 message=staged_rows=432; staging validation passed
+[COLLECTED] indicator_id=unsold_units source=MOLIT_STAT_FILE stage_status=production_loaded rows_inserted=111 latest_period=2026-03-01 message=staged_rows=111; staging validation passed
+[COLLECTED] indicator_id=sale_price_index source=R-ONE stage_status=production_loaded rows_inserted=242 latest_period=2026-02-01 message=staged_rows=242; staging validation passed
+[COLLECTED] indicator_id=jeonse_price_index source=R-ONE stage_status=production_loaded rows_inserted=146 latest_period=2026-02-01 message=staged_rows=146; staging validation passed
+[FAILED] inserted_rows=1183
