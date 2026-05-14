@@ -15,6 +15,8 @@ RAW_BASE_DIR = ROOT_DIR / "data" / "raw" / "molit"
 PROCESSED_BASE_DIR = ROOT_DIR / "data" / "processed"
 MOLIT_META_URL = "https://stat.molit.go.kr/portal/cate/statMetaView.do"
 MOLIT_STAT_VIEW_URL = "https://stat.molit.go.kr/portal/cate/statView.do"
+MOLIT_STAT_COLUMNS_URL = "https://stat.molit.go.kr/portal/stat/columns.do"
+MOLIT_STAT_DATA_URL = "https://stat.molit.go.kr/portal/stat/data.do"
 MOLIT_DOWNLOAD_URL = "https://stat.molit.go.kr/portal/common/downLoadFile.do"
 
 NATIONWIDE = "전국"
@@ -51,6 +53,14 @@ class MolitStatFileSource:
         fallback = definition.fallback_source
         if fallback is None:
             raise SourceError(f"{indicator_id} fallback_source is not configured.")
+
+        if indicator_id in {"completion_volume", "housing_permits"}:
+            standardized = self.fetch_indicator_rows_from_stat_api(indicator_id=indicator_id)
+            if not standardized.empty:
+                processed_path = processed_path_for(indicator_id)
+                processed_path.parent.mkdir(parents=True, exist_ok=True)
+                standardized.to_csv(processed_path, index=False, encoding="utf-8-sig")
+                return self.to_observation_rows(indicator_id=indicator_id, standardized=standardized)
 
         catalog = self.fetch_file_catalog(h_rs_id=fallback.h_rs_id, h_form_id=fallback.h_form_id)
         ranked_entries = self.rank_catalog_entries(indicator_id=indicator_id, catalog=catalog)
@@ -100,6 +110,122 @@ class MolitStatFileSource:
             }
             for original_name, real_name, midpath, frame_name in matches
         ]
+
+    def fetch_indicator_rows_from_stat_api(self, indicator_id: str) -> pd.DataFrame:
+        definition = INDICATORS[indicator_id]
+        fallback = definition.fallback_source
+        if fallback is None or not fallback.h_form_id:
+            return pd.DataFrame()
+
+        latest_period = self.fetch_latest_available_period(indicator_id)
+        if not latest_period:
+            return pd.DataFrame()
+
+        start_period = self.shift_period(latest_period, months=23)
+        columns = self.fetch_stat_columns(form_id=fallback.h_form_id)
+        data = self.fetch_stat_data(
+            form_id=fallback.h_form_id,
+            start_period=start_period,
+            end_period=latest_period,
+        )
+        return self.standardize_stat_rows(
+            indicator_id=indicator_id,
+            columns=columns,
+            data=data,
+        )
+
+    def fetch_stat_columns(self, form_id: str) -> list[dict]:
+        response = self.request_with_retry(
+            MOLIT_STAT_COLUMNS_URL,
+            params={"formId": form_id, "styleNum": "1"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return payload.get("data", []) if isinstance(payload, dict) else []
+
+    def fetch_stat_data(self, form_id: str, start_period: str, end_period: str) -> list[dict]:
+        response = self.request_with_retry(
+            MOLIT_STAT_DATA_URL,
+            params={
+                "formId": form_id,
+                "styleNum": "1",
+                "apprYn": "Y",
+                "startDate": start_period,
+                "endDate": end_period,
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return payload.get("data", []) if isinstance(payload, dict) else []
+
+    def standardize_stat_rows(self, indicator_id: str, columns: list[dict], data: list[dict]) -> pd.DataFrame:
+        if not columns or not data:
+            return pd.DataFrame()
+
+        dimension_map: dict[str, str] = {}
+        metric_keys: list[str] = []
+        for column in columns:
+            key = str(column.get("DATA_DIV_ID"))
+            data_div = str(column.get("DATA_DIV", ""))
+            name = str(column.get("DATA_DIV_NM", "")).strip()
+            if data_div == "D":
+                dimension_map[key] = name
+            elif data_div == "M":
+                metric_keys.append(key)
+
+        if not metric_keys:
+            return pd.DataFrame()
+        value_key = metric_keys[0]
+
+        rows: list[dict] = []
+        for record in data:
+            period_text = str(record.get("0", "")).strip()
+            region = self.clean_region(str(record.get("3", "")).strip())
+            value = self.safe_float(record.get(value_key))
+            parsed_period = self.parse_molit_period_label(period_text)
+            if parsed_period is None or not region or value is None:
+                continue
+
+            group_name = self.normalize_space(str(record.get("1", "")).strip())
+            sector_name = self.normalize_space(str(record.get("2", "")).strip())
+            if not self.is_total_row(group_name, sector_name):
+                continue
+
+            rows.append(
+                {
+                    "indicator_id": indicator_id,
+                    "date": f"{parsed_period[:4]}-{parsed_period[4:6]}-01",
+                    "region": region,
+                    "value": value,
+                    "unit": "호",
+                    "source": "MOLIT_STAT_FILE",
+                }
+            )
+
+        return self.standardized_frame(rows)
+
+    def parse_molit_period_label(self, text: str) -> str | None:
+        digits = re.sub(r"\D", "", text)
+        if len(digits) >= 6:
+            return digits[:6]
+        return None
+
+    def normalize_space(self, value: str) -> str:
+        return re.sub(r"\s+", "", value)
+
+    def is_total_row(self, group_name: str, sector_name: str) -> bool:
+        total_tokens = {"총계", "총계", "총계", "총계", "총계", "총계", "총계", "총계", "총계", "총계"}
+        normalized_group = self.normalize_space(group_name)
+        normalized_sector = self.normalize_space(sector_name)
+        return normalized_group in {"총계", "총계", "총계", "총계", "총계"} and normalized_sector in {"총계", "총계", "총계", "총계", "총계"}
+
+    def shift_period(self, period: str, months: int) -> str:
+        year = int(period[:4])
+        month = int(period[4:6])
+        total = year * 12 + (month - 1) - months
+        shifted_year = total // 12
+        shifted_month = total % 12 + 1
+        return f"{shifted_year:04d}{shifted_month:02d}"
 
     def choose_preferred_entry(self, indicator_id: str, catalog: list[dict]) -> dict | None:
         if not catalog:
