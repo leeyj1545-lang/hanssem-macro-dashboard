@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import math
 from dataclasses import asdict
-from datetime import date
 from urllib.parse import urlencode
 
 import pandas as pd
@@ -15,6 +13,10 @@ DEFAULT_STATBL_IDS = {
     "sale_price_index": "A_2024_00178",
     "jeonse_price_index": "A_2024_00182",
 }
+
+DEFAULT_REGION_NAME = "전국"
+DEFAULT_REGION_CLS_ID = "500001"
+DEFAULT_ITEM_ID = "100001"
 
 
 class RoneSource:
@@ -42,7 +44,9 @@ class RoneSource:
                 {
                     "service_code": candidate_params.get("service_code", "SttsApiTblData.do"),
                     "statbl_id": candidate_params["statbl_id"],
-                    "region_name": candidate_params.get("region_name", "전국"),
+                    "region_name": candidate_params.get("region_name", DEFAULT_REGION_NAME),
+                    "region_cls_id": candidate_params.get("region_cls_id", DEFAULT_REGION_CLS_ID),
+                    "item_id": candidate_params.get("item_id", DEFAULT_ITEM_ID),
                     "dtacycle_cd": candidate_params.get("dtacycle_cd", "MM"),
                     "label": "saved_candidate",
                 }
@@ -53,7 +57,9 @@ class RoneSource:
             {
                 "service_code": detail.stat_code or "SttsApiTblData.do",
                 "statbl_id": default_statbl_id,
-                "region_name": "전국",
+                "region_name": DEFAULT_REGION_NAME,
+                "region_cls_id": DEFAULT_REGION_CLS_ID,
+                "item_id": DEFAULT_ITEM_ID,
                 "dtacycle_cd": "MM",
                 "label": "default_statbl_id",
             }
@@ -154,7 +160,13 @@ class RoneSource:
                     service_code=candidate["service_code"],
                     dtacycle_cd=candidate["dtacycle_cd"],
                 )
-                standardized = self.standardize_rows(indicator_id=indicator_id, rows=raw_rows, region_name=candidate["region_name"])
+                standardized = self.standardize_rows(
+                    indicator_id=indicator_id,
+                    rows=raw_rows,
+                    region_name=candidate["region_name"],
+                    region_cls_id=candidate.get("region_cls_id"),
+                    item_id=candidate.get("item_id"),
+                )
                 if not standardized.empty:
                     return self.to_observation_rows(indicator_id=indicator_id, standardized=standardized, candidate=candidate)
             except Exception as exc:  # pragma: no cover
@@ -178,24 +190,55 @@ class RoneSource:
         rows = [row for row in row_block if isinstance(row, dict)] if isinstance(row_block, list) else []
         return rows, total_count
 
-    def standardize_rows(self, indicator_id: str, rows: list[dict], region_name: str = "전국") -> pd.DataFrame:
+    def standardize_rows(
+        self,
+        indicator_id: str,
+        rows: list[dict],
+        region_name: str = DEFAULT_REGION_NAME,
+        region_cls_id: str | None = DEFAULT_REGION_CLS_ID,
+        item_id: str | None = DEFAULT_ITEM_ID,
+    ) -> pd.DataFrame:
         if not rows:
             return pd.DataFrame(columns=["indicator_id", "date", "region", "value", "unit", "source"])
+
         frame = pd.DataFrame(rows)
         required = {"WRTTIME_IDTFR_ID", "DTA_VAL", "CLS_NM"}
         if not required.issubset(frame.columns):
             return pd.DataFrame(columns=["indicator_id", "date", "region", "value", "unit", "source"])
-        frame = frame[frame["CLS_NM"] == region_name].copy()
-        frame = frame[frame["ITM_NM"].astype(str).str.contains("지수", na=False)].copy()
-        frame["date"] = pd.to_datetime(frame["WRTTIME_IDTFR_ID"].astype(str) + "01", format="%Y%m%d", errors="coerce")
+
+        if region_cls_id and "CLS_ID" in frame.columns:
+            region_filtered = frame[frame["CLS_ID"].astype(str) == str(region_cls_id)].copy()
+            if not region_filtered.empty:
+                frame = region_filtered
+            else:
+                frame = frame[frame["CLS_NM"].astype(str).str.strip() == region_name].copy()
+        else:
+            frame = frame[frame["CLS_NM"].astype(str).str.strip() == region_name].copy()
+
+        if item_id and "ITM_ID" in frame.columns:
+            item_filtered = frame[frame["ITM_ID"].astype(str) == str(item_id)].copy()
+            if not item_filtered.empty:
+                frame = item_filtered
+            elif "ITM_NM" in frame.columns:
+                frame = frame[frame["ITM_NM"].astype(str).str.contains("지수", na=False)].copy()
+        elif "ITM_NM" in frame.columns:
+            frame = frame[frame["ITM_NM"].astype(str).str.contains("지수", na=False)].copy()
+
+        date_token = frame["WRTTIME_IDTFR_ID"].astype(str).str.replace(r"\D", "", regex=True).str[:6]
+        frame["date"] = pd.to_datetime(date_token + "01", format="%Y%m%d", errors="coerce")
         frame["value"] = pd.to_numeric(frame["DTA_VAL"], errors="coerce")
         frame = frame.dropna(subset=["date", "value"])
-        frame = frame.sort_values("date").drop_duplicates(subset=["date", "CLS_NM"], keep="last")
+        frame = frame.sort_values("date").drop_duplicates(subset=["date"], keep="last")
+
+        region_series = frame["CLS_NM"].astype(str).str.strip()
+        if region_cls_id and "CLS_ID" in frame.columns:
+            region_series = region_series.where(frame["CLS_ID"].astype(str) != str(region_cls_id), DEFAULT_REGION_NAME)
+
         standardized = pd.DataFrame(
             {
                 "indicator_id": indicator_id,
                 "date": frame["date"].dt.strftime("%Y-%m-%d"),
-                "region": frame["CLS_NM"],
+                "region": region_series,
                 "value": frame["value"].astype(float),
                 "unit": frame["UI_NM"].fillna(INDICATORS[indicator_id].unit),
                 "source": "R-ONE",
@@ -239,4 +282,3 @@ class RoneSource:
             "fallback_source": asdict(definition.fallback_source) if definition.fallback_source else {},
             "service_code_candidates": self.build_service_code_candidates(indicator_id=indicator_id),
         }
-

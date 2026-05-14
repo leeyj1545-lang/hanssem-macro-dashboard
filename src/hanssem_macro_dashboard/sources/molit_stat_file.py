@@ -14,7 +14,11 @@ from hanssem_macro_dashboard.sources.base import SourceError
 RAW_BASE_DIR = ROOT_DIR / "data" / "raw" / "molit"
 PROCESSED_BASE_DIR = ROOT_DIR / "data" / "processed"
 MOLIT_META_URL = "https://stat.molit.go.kr/portal/cate/statMetaView.do"
+MOLIT_STAT_VIEW_URL = "https://stat.molit.go.kr/portal/cate/statView.do"
 MOLIT_DOWNLOAD_URL = "https://stat.molit.go.kr/portal/common/downLoadFile.do"
+
+NATIONWIDE = "전국"
+MONTHLY_POSTING_MARKER = "홈페이지게시용"
 
 
 def raw_dir_for(indicator_id: str) -> Path:
@@ -63,6 +67,17 @@ class MolitStatFileSource:
         standardized.to_csv(processed_path, index=False, encoding="utf-8-sig")
         return self.to_observation_rows(indicator_id=indicator_id, standardized=standardized)
 
+    def fetch_latest_available_period(self, indicator_id: str) -> str:
+        definition = INDICATORS[indicator_id]
+        fallback = definition.fallback_source
+        if fallback is None:
+            return ""
+        params = {"hRsId": fallback.h_rs_id, "hFormId": fallback.h_form_id}
+        response = self.request_with_retry(MOLIT_STAT_VIEW_URL, params=params)
+        response.raise_for_status()
+        periods = sorted(set(re.findall(r"20\d{4}", response.text)))
+        return periods[-1] if periods else ""
+
     def fetch_file_catalog(self, h_rs_id: str, h_form_id: str) -> list[dict]:
         params = {"hRsId": h_rs_id, "hFormId": h_form_id}
         response = self.request_with_retry(MOLIT_META_URL, params=params)
@@ -80,32 +95,73 @@ class MolitStatFileSource:
         ]
 
     def choose_preferred_entry(self, indicator_id: str, catalog: list[dict]) -> dict | None:
-        if indicator_id == "completion_volume":
-            preferences = [
-                lambda item: "준공_연도별,월별,지역별.xlsx" in item["original_name"],
-                lambda item: item["original_name"].endswith("준공실적(홈페이지게시용).xls"),
-                lambda item: item["extension"] == ".xlsx",
-            ]
-        elif indicator_id == "housing_permits":
-            preferences = [
-                lambda item: "인허가_연도별,월별,지역별.xlsx" in item["original_name"],
-                lambda item: item["original_name"].endswith("인허가실적(홈페이지게시용).xls"),
-                lambda item: item["extension"] == ".xlsx",
-            ]
-        elif indicator_id == "unsold_units":
-            preferences = [
-                lambda item: item["original_name"].startswith("미분양주택현황") and item["extension"] == ".xlsx",
-                lambda item: "미분양주택현황" in item["original_name"] and item["extension"] == ".xlsx",
-                lambda item: item["extension"] == ".xlsx",
-            ]
-        else:
-            preferences = [lambda item: item["extension"] in {".xlsx", ".zip", ".xls"}]
+        if not catalog:
+            return None
 
-        for predicate in preferences:
-            for item in catalog:
-                if predicate(item):
-                    return item
-        return catalog[0] if catalog else None
+        ranked = sorted(
+            catalog,
+            key=lambda item: self.score_catalog_entry(indicator_id=indicator_id, item=item),
+            reverse=True,
+        )
+        return ranked[0]
+
+    def score_catalog_entry(self, indicator_id: str, item: dict) -> tuple[int, int, int, int, str]:
+        name = f"{item.get('original_name', '')} {item.get('real_name', '')}"
+        extension = str(item.get("extension", "")).lower()
+        monthly_period = self.extract_monthly_period(name)
+        period_score = monthly_period or self.extract_annual_period(name)
+
+        posting_score = 0
+        if MONTHLY_POSTING_MARKER in name:
+            posting_score += 1000
+
+        if indicator_id in {"completion_volume", "housing_permits"}:
+            if monthly_period:
+                posting_score += 500
+            if "연도별" in name and "월별" in name and "지역별" in name:
+                posting_score += 200
+        elif indicator_id == "unsold_units":
+            if monthly_period:
+                posting_score += 500
+            if "통계누리" in name:
+                posting_score += 200
+
+        extension_score = {".xlsx": 30, ".xls": 20, ".csv": 10, ".txt": 5}.get(extension, 0)
+        monthly_flag = 1 if monthly_period else 0
+        return (posting_score, monthly_flag, period_score, extension_score, name)
+
+    def extract_monthly_period(self, text: str) -> int:
+        monthly_patterns = [
+            r"(\d{2,4})년\s*(\d{1,2})월",
+            r"(\d{4})년(\d{1,2})월말",
+            r"(\d{2})\.(\d{1,2})월",
+        ]
+        for pattern in monthly_patterns:
+            match = re.search(pattern, text)
+            if not match:
+                continue
+            year = self.normalize_year(match.group(1))
+            month = int(match.group(2))
+            if 1 <= month <= 12:
+                return year * 100 + month
+        return 0
+
+    def extract_annual_period(self, text: str) -> int:
+        range_match = re.search(r"(\d{2,4})년\s*-\s*(\d{2,4})년", text)
+        if range_match:
+            return self.normalize_year(range_match.group(2)) * 100 + 12
+        single_match = re.search(r"(\d{2,4})년", text)
+        if single_match:
+            return self.normalize_year(single_match.group(1)) * 100 + 12
+        return 0
+
+    def normalize_year(self, value: str) -> int:
+        year = int(value)
+        if year >= 1000:
+            return year
+        current_two_digits = pd.Timestamp.today().year % 100
+        century = 2000 if year <= current_two_digits + 1 else 1900
+        return century + year
 
     def download_entry(self, indicator_id: str, entry: dict) -> Path:
         directory = raw_dir_for(indicator_id)
@@ -118,7 +174,7 @@ class MolitStatFileSource:
         response = self.request_with_retry(MOLIT_DOWNLOAD_URL, params=params)
         response.raise_for_status()
         content_type = response.headers.get("content-type", "")
-        if "text/html" in content_type and "파일이없습니다" in response.text:
+        if "text/html" in content_type and "file not found" in response.text.lower():
             raise SourceError("MOLIT fallback file download returned 'file not found'.")
 
         path = directory / entry["real_name"]
@@ -139,8 +195,6 @@ class MolitStatFileSource:
         raise SourceError("; ".join(errors))
 
     def parse_indicator_workbook(self, indicator_id: str, path: Path) -> pd.DataFrame:
-        if path.suffix.lower() != ".xlsx":
-            raise SourceError(f"Unsupported fallback file format for current runtime: {path.suffix}")
         if indicator_id == "completion_volume":
             return self.parse_completion_volume_workbook(path)
         if indicator_id == "housing_permits":
@@ -151,30 +205,31 @@ class MolitStatFileSource:
 
     def parse_completion_volume_workbook(self, path: Path) -> pd.DataFrame:
         rows: list[dict] = []
-        excel = pd.ExcelFile(path)
-        for sheet_name in excel.sheet_names:
-            year = self.parse_sheet_year(sheet_name)
-            if year is None:
-                continue
-            sheet = pd.read_excel(path, sheet_name=sheet_name, header=None)
-            if sheet.shape[0] < 6:
+        year_hint = self.parse_year_from_filename(path.name)
+        for sheet_name, sheet in self.iter_sheets(path):
+            year = self.parse_sheet_year(sheet_name) or year_hint
+            if year is None or sheet.shape[0] < 4:
                 continue
 
-            month_columns = self.extract_month_columns(sheet.iloc[2].tolist())
-            total_row = sheet.iloc[3] if len(sheet) > 3 else None
-            if total_row is not None and str(total_row.iloc[0]).strip() == "년월계":
+            header_row_idx, month_columns = self.find_month_columns(sheet)
+            if header_row_idx is None or not month_columns:
+                continue
+
+            total_row_idx = header_row_idx + 1
+            if total_row_idx < len(sheet):
                 rows.extend(
                     self.build_monthly_rows(
                         indicator_id="completion_volume",
                         year=year,
-                        region="전국",
+                        region=NATIONWIDE,
                         month_columns=month_columns,
-                        row_values=total_row,
+                        row_values=sheet.iloc[total_row_idx],
                         unit="호",
                     )
                 )
 
-            for row_idx in range(5, len(sheet)):
+            region_start = header_row_idx + 3
+            for row_idx in range(region_start, len(sheet)):
                 region = self.clean_region(sheet.iat[row_idx, 0])
                 if not region:
                     continue
@@ -188,40 +243,36 @@ class MolitStatFileSource:
                         unit="호",
                     )
                 )
-
         return self.standardized_frame(rows)
 
     def parse_housing_permits_workbook(self, path: Path) -> pd.DataFrame:
         rows: list[dict] = []
-        excel = pd.ExcelFile(path)
-        for sheet_name in excel.sheet_names:
-            year = self.parse_sheet_year(sheet_name)
-            if year is None:
-                continue
-            sheet = pd.read_excel(path, sheet_name=sheet_name, header=None)
-            if sheet.shape[0] < 7:
+        year_hint = self.parse_year_from_filename(path.name)
+        for sheet_name, sheet in self.iter_sheets(path):
+            year = self.parse_sheet_year(sheet_name) or year_hint
+            if year is None or sheet.shape[0] < 5:
                 continue
 
-            month_columns = self.extract_month_columns(sheet.iloc[2].tolist())
-            total_monthly_row = sheet.iloc[3] if len(sheet) > 3 else None
-            total_cumulative_row = sheet.iloc[4] if len(sheet) > 4 else None
-            if (
-                total_monthly_row is not None
-                and total_cumulative_row is not None
-                and str(total_monthly_row.iloc[0]).strip() == "년월계"
-                and "누계" in str(total_cumulative_row.iloc[0]).strip()
-            ):
+            header_row_idx, month_columns = self.find_month_columns(sheet)
+            if header_row_idx is None or not month_columns:
+                continue
+
+            total_monthly_idx = header_row_idx + 1
+            total_cumulative_idx = header_row_idx + 2
+            if total_monthly_idx < len(sheet):
+                monthly_row = sheet.iloc[total_monthly_idx]
+                cumulative_row = sheet.iloc[total_cumulative_idx] if total_cumulative_idx < len(sheet) else None
                 rows.extend(
                     self.build_housing_permits_rows(
                         year=year,
-                        region="전국",
+                        region=NATIONWIDE,
                         month_columns=month_columns,
-                        monthly_row=total_monthly_row,
-                        cumulative_row=total_cumulative_row,
+                        monthly_row=monthly_row,
+                        cumulative_row=cumulative_row,
                     )
                 )
 
-            row_idx = 5
+            row_idx = header_row_idx + 3
             while row_idx < len(sheet):
                 region = self.clean_region(sheet.iat[row_idx, 0])
                 if not region:
@@ -230,8 +281,9 @@ class MolitStatFileSource:
                 monthly_row = sheet.iloc[row_idx]
                 next_row = sheet.iloc[row_idx + 1] if row_idx + 1 < len(sheet) else None
                 cumulative_row = None
-                if next_row is not None and pd.isna(next_row.iloc[0]):
+                if next_row is not None and self.is_cumulative_row(next_row):
                     cumulative_row = next_row
+
                 rows.extend(
                     self.build_housing_permits_rows(
                         year=year,
@@ -242,50 +294,77 @@ class MolitStatFileSource:
                     )
                 )
                 row_idx += 2 if cumulative_row is not None else 1
-
         return self.standardized_frame(rows)
 
     def parse_unsold_units_workbook(self, path: Path) -> pd.DataFrame:
-        sheet = pd.read_excel(path, sheet_name="총괄★", header=None)
-        if sheet.empty or sheet.shape[0] < 5:
-            return self.standardized_frame([])
-
-        header_row = sheet.iloc[2].tolist()
-        total_row = sheet.iloc[4].tolist()
-        completed_row = sheet.iloc[7].tolist() if sheet.shape[0] > 7 else []
-
         rows: list[dict] = []
-        for col_idx, header in enumerate(header_row[1:], start=1):
-            parsed = self.parse_compact_period(str(header).strip())
-            if parsed is None:
+        for _, sheet in self.iter_sheets(path):
+            if sheet.empty or sheet.shape[0] < 5:
                 continue
-            year, month = parsed
-            total_value = self.safe_float(total_row[col_idx] if col_idx < len(total_row) else None)
-            if total_value is not None:
+
+            target_row_idx = self.find_row_index(sheet, {"계", NATIONWIDE, "전국계"})
+            if target_row_idx is None:
+                target_row_idx = 4 if len(sheet) > 4 else None
+            if target_row_idx is None:
+                continue
+
+            header_row_idx = self.find_best_period_header_row(sheet)
+            if header_row_idx is None:
+                continue
+
+            header_row = sheet.iloc[header_row_idx].tolist()
+            total_row = sheet.iloc[target_row_idx].tolist()
+
+            for col_idx, header in enumerate(header_row[1:], start=1):
+                parsed = self.parse_compact_period(str(header).strip())
+                if parsed is None:
+                    continue
+                year, month = parsed
+                total_value = self.safe_float(total_row[col_idx] if col_idx < len(total_row) else None)
+                if total_value is None:
+                    continue
                 rows.append(
                     {
                         "indicator_id": "unsold_units",
                         "date": f"{year:04d}-{month:02d}-01",
-                        "region": "전국",
+                        "region": NATIONWIDE,
                         "value": total_value,
-                        "unit": "호",
-                        "source": "MOLIT_STAT_FILE",
-                    }
-                )
-            completed_value = self.safe_float(completed_row[col_idx] if col_idx < len(completed_row) else None)
-            if completed_value is not None:
-                rows.append(
-                    {
-                        "indicator_id": "unsold_units_completed",
-                        "date": f"{year:04d}-{month:02d}-01",
-                        "region": "전국",
-                        "value": completed_value,
                         "unit": "호",
                         "source": "MOLIT_STAT_FILE",
                     }
                 )
         combined = self.standardized_frame(rows)
         return combined[combined["indicator_id"] == "unsold_units"].reset_index(drop=True)
+
+    def iter_sheets(self, path: Path) -> list[tuple[str, pd.DataFrame]]:
+        suffix = path.suffix.lower()
+        engines: list[str | None]
+        if suffix == ".xls":
+            engines = ["xlrd", None]
+        elif suffix == ".xlsx":
+            engines = ["openpyxl", "xlrd", None]
+        else:
+            engines = [None]
+
+        last_error: Exception | None = None
+        for engine in engines:
+            try:
+                workbook = pd.ExcelFile(path, engine=engine)
+                return [
+                    (
+                        sheet_name,
+                        pd.read_excel(path, sheet_name=sheet_name, header=None, engine=engine),
+                    )
+                    for sheet_name in workbook.sheet_names
+                ]
+            except Exception as exc:
+                last_error = exc
+
+        try:
+            tables = pd.read_html(path)
+        except Exception as exc:
+            raise SourceError(f"Unsupported MOLIT workbook format for {path.name}: {last_error or exc}") from exc
+        return [(f"table_{idx}", table) for idx, table in enumerate(tables, start=1)]
 
     def build_monthly_rows(
         self,
@@ -325,9 +404,8 @@ class MolitStatFileSource:
         previous_cumulative: float | None = None
         for col_idx, month in month_columns:
             monthly_value = self.safe_float(monthly_row.iloc[col_idx] if monthly_row is not None and col_idx < len(monthly_row) else None)
-            cumulative_value = self.safe_float(
-                cumulative_row.iloc[col_idx] if cumulative_row is not None and col_idx < len(cumulative_row) else None
-            )
+            cumulative_value = self.safe_float(cumulative_row.iloc[col_idx] if cumulative_row is not None and col_idx < len(cumulative_row) else None)
+
             derived_value: float | None
             if cumulative_value is not None:
                 derived_value = cumulative_value if previous_cumulative is None or month == 1 else cumulative_value - previous_cumulative
@@ -339,6 +417,7 @@ class MolitStatFileSource:
 
             if derived_value is None:
                 continue
+
             row = {
                 "indicator_id": "housing_permits",
                 "date": f"{year:04d}-{month:02d}-01",
@@ -361,7 +440,7 @@ class MolitStatFileSource:
     def to_observation_rows(self, indicator_id: str, standardized: pd.DataFrame) -> list[dict]:
         definition = INDICATORS[indicator_id]
         fallback = definition.fallback_source
-        nationwide = standardized[standardized["region"] == "전국"].copy()
+        nationwide = standardized[standardized["region"] == NATIONWIDE].copy()
         rows: list[dict] = []
         for row in nationwide.to_dict(orient="records"):
             meta = {
@@ -400,39 +479,97 @@ class MolitStatFileSource:
         if not rows:
             return pd.DataFrame(columns=["indicator_id", "date", "region", "value", "unit", "source"])
         frame = pd.DataFrame(rows)
+        frame["date"] = pd.to_datetime(frame["date"], errors="coerce")
+        frame = frame.dropna(subset=["date", "value", "region"])
+        frame["region"] = frame["region"].replace({"전국계": NATIONWIDE, "총계": NATIONWIDE})
         frame = frame.drop_duplicates(subset=["indicator_id", "date", "region"], keep="last")
         frame = frame.sort_values(["indicator_id", "date", "region"]).reset_index(drop=True)
+        frame["date"] = frame["date"].dt.strftime("%Y-%m-%d")
         return frame
+
+    def find_month_columns(self, sheet: pd.DataFrame) -> tuple[int | None, list[tuple[int, int]]]:
+        for row_idx in range(min(6, len(sheet))):
+            month_columns = self.extract_month_columns(sheet.iloc[row_idx].tolist())
+            if month_columns:
+                return row_idx, month_columns
+        return None, []
+
+    def find_best_period_header_row(self, sheet: pd.DataFrame) -> int | None:
+        best_row: int | None = None
+        best_count = 0
+        for row_idx in range(min(8, len(sheet))):
+            count = 0
+            for value in sheet.iloc[row_idx].tolist():
+                if self.parse_compact_period(str(value).strip()) is not None:
+                    count += 1
+            if count > best_count:
+                best_row = row_idx
+                best_count = count
+        return best_row if best_count > 0 else None
 
     def extract_month_columns(self, header_row: list) -> list[tuple[int, int]]:
         month_columns: list[tuple[int, int]] = []
+        seen: set[int] = set()
         for col_idx, header in enumerate(header_row):
             month = self.parse_month_header(str(header).strip())
-            if month is not None:
-                month_columns.append((col_idx, month))
+            if month is None or month in seen:
+                continue
+            seen.add(month)
+            month_columns.append((col_idx, month))
         return month_columns
 
     def parse_sheet_year(self, sheet_name: str) -> int | None:
-        match = re.search(r"(\d{2})년", str(sheet_name))
-        if not match:
-            return None
-        year_two_digits = int(match.group(1))
-        current_two_digits = pd.Timestamp.today().year % 100
-        century = 2000 if year_two_digits <= current_two_digits + 1 else 1900
-        return century + year_two_digits
+        match = re.search(r"(\d{2,4})\s*년", str(sheet_name))
+        if match:
+            return self.normalize_year(match.group(1))
+        match = re.search(r"(\d{2})$", str(sheet_name))
+        if match:
+            return self.normalize_year(match.group(1))
+        return None
+
+    def parse_year_from_filename(self, filename: str) -> int | None:
+        match = re.search(r"(\d{2,4})\s*년\s*\d{1,2}\s*월", filename)
+        if match:
+            return self.normalize_year(match.group(1))
+        return None
 
     def parse_month_header(self, text: str) -> int | None:
-        match = re.search(r"(\d{1,2})월", text)
+        match = re.search(r"(\d{1,2})", text)
         if not match:
             return None
         month = int(match.group(1))
         return month if 1 <= month <= 12 else None
 
     def parse_compact_period(self, text: str) -> tuple[int, int] | None:
-        match = re.search(r"(\d{2})\.(\d{1,2})", text)
-        if not match:
-            return None
-        return 2000 + int(match.group(1)), int(match.group(2))
+        patterns = [
+            r"(\d{4})[.\-/](\d{1,2})",
+            r"(\d{2})[.\-/](\d{1,2})",
+            r"(\d{4})년\s*(\d{1,2})월",
+            r"(\d{2})년\s*(\d{1,2})월",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text)
+            if not match:
+                continue
+            year = self.normalize_year(match.group(1))
+            month = int(match.group(2))
+            if 1 <= month <= 12:
+                return year, month
+        return None
+
+    def find_row_index(self, sheet: pd.DataFrame, keywords: set[str]) -> int | None:
+        for row_idx in range(len(sheet)):
+            first = str(sheet.iat[row_idx, 0]).strip() if sheet.shape[1] > 0 else ""
+            if first in keywords:
+                return row_idx
+        return None
+
+    def is_cumulative_row(self, row: pd.Series) -> bool:
+        first = str(row.iloc[0]).strip() if len(row) > 0 and not pd.isna(row.iloc[0]) else ""
+        second = str(row.iloc[1]).strip() if len(row) > 1 and not pd.isna(row.iloc[1]) else ""
+        if first:
+            return first in {"누계", "(누계)", "계", "총계"}
+        return second in {"누계", "(누계)", "계", "총계"}
 
     def clean_region(self, value) -> str | None:
         if pd.isna(value):
@@ -440,7 +577,7 @@ class MolitStatFileSource:
         text = str(value).strip()
         if not text:
             return None
-        if text in {"구분", "년월계", "(년누계)"}:
+        if text in {"구분", "전월계", "(전월계)", "누계", "(누계)", "계", "총계"}:
             return None
         if text.startswith("("):
             return None
@@ -450,7 +587,7 @@ class MolitStatFileSource:
         if pd.isna(value):
             return None
         text = str(value).replace(",", "").replace(" ", "").strip()
-        if text in {"", "-", "nan"}:
+        if text in {"", "-", "nan", "None"}:
             return None
         try:
             return float(text)

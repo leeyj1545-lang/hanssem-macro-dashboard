@@ -578,6 +578,12 @@ def verify_indicator_fallback(indicator_id: str, timeout: int) -> dict[str, Any]
         }
 
     source = MolitStatFileSource(indicator_ids=[indicator_id], timeout=timeout)
+    source_latest_period = ""
+    try:
+        source_latest_period = source.fetch_latest_available_period(indicator_id)
+    except Exception:
+        source_latest_period = ""
+
     try:
         standardized_rows = source.fetch_indicator_rows(indicator_id)
     except SourceError as exc:
@@ -625,6 +631,14 @@ def verify_indicator_fallback(indicator_id: str, timeout: int) -> dict[str, Any]
 
     latest_period = recent["date"].max().strftime("%Y-%m-%d")
     message = f"Fallback file download and read_excel succeeded; standardized rows are available through {latest_period}."
+    if source_latest_period:
+        source_latest_date = pd.to_datetime(source_latest_period + "01", format="%Y%m%d", errors="coerce")
+        if pd.notna(source_latest_date):
+            source_latest_text = source_latest_date.strftime("%Y-%m-%d")
+            message += f" Official source page advertises periods through {source_latest_text}."
+            gap_months = (source_latest_date.year - recent["date"].max().year) * 12 + (source_latest_date.month - recent["date"].max().month)
+            if gap_months > 0:
+                message += f" Parsed data currently lags the official source by {gap_months} month(s)."
     warning_count = 0
     if indicator_id == "housing_permits":
         warning_count = int((standardized["value"] < 0).sum())
@@ -645,6 +659,8 @@ def verify_indicator_fallback(indicator_id: str, timeout: int) -> dict[str, Any]
         "fallback_h_form_id": fallback.h_form_id,
         "fallback_processed_path": str(processed_path_for(indicator_id)),
         "fallback_source_series_code": f"hRsId={fallback.h_rs_id}&hFormId={fallback.h_form_id}",
+        "fallback_source_latest_period": source_latest_period,
+        "fallback_data_latest_period": latest_period,
         "fallback_warning_count": warning_count,
         "rows": int(len(standardized_rows)),
     }
@@ -690,6 +706,8 @@ def execute_rone_probe(candidate: dict[str, str], indicator_id: str, timeout: in
             indicator_id=indicator_id,
             rows=rows,
             region_name=candidate.get("region_name", "전국"),
+            region_cls_id=candidate.get("region_cls_id"),
+            item_id=candidate.get("item_id"),
         )
     except requests.exceptions.Timeout:
         return {"service_code": candidate["service_code"], "statbl_id": candidate["statbl_id"], "rows": 0, "sample_keys": [], "first_3_rows": [], "message": "request timeout", "status": "failed_network"}
@@ -704,9 +722,16 @@ def execute_rone_probe(candidate: dict[str, str], indicator_id: str, timeout: in
     except Exception as exc:
         return {"service_code": candidate["service_code"], "statbl_id": candidate["statbl_id"], "rows": 0, "sample_keys": [], "first_3_rows": [], "message": str(exc), "status": "failed_parse"}
 
-    recent_rows = len(standardized)
-    latest_period = standardized["date"].max() if not standardized.empty else ""
-    if rows and not standardized.empty:
+    recent_rows = 0
+    latest_period = ""
+    if not standardized.empty:
+        standardized_dates = pd.to_datetime(standardized["date"], errors="coerce")
+        current_month = pd.Timestamp(date.today().replace(day=1))
+        minimum_month = current_month - pd.DateOffset(months=24)
+        recent_rows = int(((standardized_dates >= minimum_month) & (standardized_dates <= current_month)).sum())
+        latest_period = standardized_dates.max().strftime("%Y-%m-%d") if standardized_dates.notna().any() else ""
+
+    if rows and not standardized.empty and recent_rows > 0:
         return {
             "service_code": candidate["service_code"],
             "statbl_id": candidate["statbl_id"],
@@ -728,7 +753,7 @@ def execute_rone_probe(candidate: dict[str, str], indicator_id: str, timeout: in
             "latest_period": latest_period,
             "sample_keys": sample_keys,
             "first_3_rows": first_3_rows,
-            "message": "rows found but date/value/region standardization is incomplete or recent 24-month rows are absent",
+            "message": "rows found but recent 24-month standardized rows are absent or incomplete",
             "status": "pending_condition_check",
             "standardized_rows": [],
         }
@@ -801,6 +826,8 @@ def verify_indicator_rone(indicator_id: str, timeout: int) -> dict[str, Any]:
                 "service_code": verified_result["service_code"],
                 "statbl_id": verified_result["statbl_id"],
                 "region_name": "전국",
+                "region_cls_id": "500001",
+                "item_id": "100001",
                 "dtacycle_cd": "MM",
             },
         }
