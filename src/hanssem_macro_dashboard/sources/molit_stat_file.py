@@ -53,19 +53,26 @@ class MolitStatFileSource:
             raise SourceError(f"{indicator_id} fallback_source is not configured.")
 
         catalog = self.fetch_file_catalog(h_rs_id=fallback.h_rs_id, h_form_id=fallback.h_form_id)
-        entry = self.choose_preferred_entry(indicator_id=indicator_id, catalog=catalog)
-        if not entry:
+        ranked_entries = self.rank_catalog_entries(indicator_id=indicator_id, catalog=catalog)
+        if not ranked_entries:
             raise SourceError(f"No preferred MOLIT fallback file candidate was found for {indicator_id}.")
+        errors: list[str] = []
+        for entry in ranked_entries:
+            try:
+                local_path = self.download_entry(indicator_id=indicator_id, entry=entry)
+                standardized = self.parse_indicator_workbook(indicator_id=indicator_id, path=local_path)
+                if standardized.empty:
+                    errors.append(f"{entry['real_name']}: no standardized rows")
+                    continue
 
-        local_path = self.download_entry(indicator_id=indicator_id, entry=entry)
-        standardized = self.parse_indicator_workbook(indicator_id=indicator_id, path=local_path)
-        if standardized.empty:
-            raise SourceError("Fallback workbook was downloaded but no standardized rows were produced.")
+                processed_path = processed_path_for(indicator_id)
+                processed_path.parent.mkdir(parents=True, exist_ok=True)
+                standardized.to_csv(processed_path, index=False, encoding="utf-8-sig")
+                return self.to_observation_rows(indicator_id=indicator_id, standardized=standardized)
+            except Exception as exc:
+                errors.append(f"{entry['real_name']}: {exc}")
 
-        processed_path = processed_path_for(indicator_id)
-        processed_path.parent.mkdir(parents=True, exist_ok=True)
-        standardized.to_csv(processed_path, index=False, encoding="utf-8-sig")
-        return self.to_observation_rows(indicator_id=indicator_id, standardized=standardized)
+        raise SourceError("Fallback workbook was downloaded but no standardized rows were produced. " + " | ".join(errors[:5]))
 
     def fetch_latest_available_period(self, indicator_id: str) -> str:
         definition = INDICATORS[indicator_id]
@@ -98,12 +105,15 @@ class MolitStatFileSource:
         if not catalog:
             return None
 
-        ranked = sorted(
+        ranked = self.rank_catalog_entries(indicator_id=indicator_id, catalog=catalog)
+        return ranked[0] if ranked else None
+
+    def rank_catalog_entries(self, indicator_id: str, catalog: list[dict]) -> list[dict]:
+        return sorted(
             catalog,
             key=lambda item: self.score_catalog_entry(indicator_id=indicator_id, item=item),
             reverse=True,
         )
-        return ranked[0]
 
     def score_catalog_entry(self, indicator_id: str, item: dict) -> tuple[int, int, int, int, str]:
         name = f"{item.get('original_name', '')} {item.get('real_name', '')}"
