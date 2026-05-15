@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date
 from typing import Iterable
-from urllib.parse import urlencode
 from xml.etree import ElementTree
 
 import requests
@@ -53,10 +52,20 @@ class MolitTransactionSource(BaseSource):
     def _fetch_xml_count(self, base_url: str, lawd_code: str, deal_ymd: str) -> int:
         if not self.api_key:
             raise SourceError("DATA_GO_KR_API_KEY is missing.")
-        params = urlencode({"serviceKey": self.api_key, "LAWD_CD": lawd_code, "DEAL_YMD": deal_ymd})
-        response = requests.get(f"{base_url}?{params}", timeout=self.timeout)
+        response = requests.get(
+            base_url,
+            params={"serviceKey": self.api_key, "LAWD_CD": lawd_code, "DEAL_YMD": deal_ymd},
+            timeout=self.timeout,
+        )
         response.raise_for_status()
         root = ElementTree.fromstring(response.content)
+        result_code = root.findtext(".//resultCode", default="")
+        result_msg = root.findtext(".//resultMsg", default="")
+        if result_code and result_code != "00":
+            raise SourceError(
+                f"MOLIT transaction API error resultCode={result_code} resultMsg={result_msg} "
+                f"lawd_code={lawd_code} deal_ymd={deal_ymd}"
+            )
         items = root.findall(".//item")
         return len(items)
 
@@ -69,8 +78,10 @@ class MolitTransactionSource(BaseSource):
 
         for month in months:
             for lawd_code in self.lawd_codes:
-                trade_counter[month] += self._fetch_xml_count(self.trade_url, lawd_code, month)
-                rent_counter[month] += self._fetch_xml_count(self.rent_url, lawd_code, month)
+                if "apt_trade_volume" in self.indicator_ids:
+                    trade_counter[month] += self._fetch_xml_count(self.trade_url, lawd_code, month)
+                if "apt_rent_volume" in self.indicator_ids:
+                    rent_counter[month] += self._fetch_xml_count(self.rent_url, lawd_code, month)
 
         rows: list[dict] = []
         if "apt_trade_volume" in self.indicator_ids:
