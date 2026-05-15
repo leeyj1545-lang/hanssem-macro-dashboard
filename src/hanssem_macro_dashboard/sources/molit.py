@@ -61,9 +61,10 @@ class MolitTransactionSource(BaseSource):
         root = ElementTree.fromstring(response.content)
         result_code = root.findtext(".//resultCode", default="")
         result_msg = root.findtext(".//resultMsg", default="")
-        if result_code and result_code != "00":
+        normalized_result_code = result_code.strip()
+        if normalized_result_code and normalized_result_code not in {"00", "000"}:
             raise SourceError(
-                f"MOLIT transaction API error resultCode={result_code} resultMsg={result_msg} "
+                f"MOLIT transaction API error resultCode={normalized_result_code} resultMsg={result_msg} "
                 f"lawd_code={lawd_code} deal_ymd={deal_ymd}"
             )
         items = root.findall(".//item")
