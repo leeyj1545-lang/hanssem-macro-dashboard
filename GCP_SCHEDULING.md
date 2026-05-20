@@ -1,26 +1,29 @@
 # GCP Scheduling Guide
 
-이 프로젝트의 BigQuery ETL을 자동으로 돌리기 위한 운영 기준은 다음과 같습니다.
+이 프로젝트의 BigQuery ETL을 자동 최신화하려면 아래 구조로 운영하면 됩니다.
 
 ```text
-Cloud Run Job
+Cloud Scheduler
+-> Cloud Run Job 실행
 -> python -m hanssem_macro_dashboard.run_bq_job
 -> BigQuery staging / production 적재
--> Cloud Scheduler가 정기 실행
 ```
 
-## 1. 권장 구조
+## 1. 현재 구조
 
-- 실행기: Cloud Run Job
-- 스케줄링: Cloud Scheduler
-- 저장소: BigQuery
-- 시각화: Tableau
+- 실행기: `Cloud Run Job`
+- 스케줄러: `Cloud Scheduler`
+- 대상 프로젝트: `cellular-client-310600`
+- 대상 데이터셋: `Yunjae_Workspace`
+- 실행 리전:
+  - BigQuery: `US`
+  - Cloud Run / Scheduler: `us-central1`
 
-Colab은 수동 검증용으로 남기고, 운영 자동화는 GCP에서 수행합니다.
+Colab은 수동 검증용으로 남기고, 운영 자동화는 GCP에서 돌리는 구조를 권장합니다.
 
 ## 2. 필요한 환경변수
 
-Cloud Run Job에는 아래 환경변수가 필요합니다.
+Cloud Run Job에 아래 환경변수가 필요합니다.
 
 - `BQ_PROJECT_ID`
 - `BQ_DATASET`
@@ -30,7 +33,7 @@ Cloud Run Job에는 아래 환경변수가 필요합니다.
 - `ECOS_API_KEY` (optional)
 - `DATA_GO_KR_API_KEY` (optional)
 
-현재 권장 값:
+현재 권장값:
 
 ```text
 BQ_PROJECT_ID=cellular-client-310600
@@ -38,29 +41,57 @@ BQ_DATASET=Yunjae_Workspace
 BQ_LOCATION=US
 ```
 
-## 3. 컨테이너 이미지 빌드
+## 3. 진입점
 
-Artifact Registry 리포지토리를 먼저 준비한 뒤 이미지를 빌드/푸시합니다.
+Cloud Run Job은 아래 모듈을 실행합니다.
 
-예시:
+```text
+python -m hanssem_macro_dashboard.run_bq_job
+```
+
+이 모듈은:
+
+1. BigQuery 데이터마트 초기화
+2. `pipeline run-bq` 실행
+
+을 순서대로 수행합니다.
+
+## 4. Cloud Shell에서 처음 1회 해야 할 일
+
+### 4-1. 프로젝트 선택
 
 ```bash
 gcloud config set project cellular-client-310600
+```
 
+### 4-2. GitHub 코드 받기
+
+```bash
+git clone https://github.com/leeyj1545-lang/hanssem-macro-dashboard.git
+cd hanssem-macro-dashboard
+```
+
+### 4-3. Artifact Registry 저장소 생성
+
+```bash
 gcloud artifacts repositories create hanssem-etl \
   --repository-format=docker \
   --location=us \
   --description="Hanssem macro ETL images"
+```
 
+이미 있으면 `already exists`가 나올 수 있고, 그 경우 그대로 다음 단계로 가면 됩니다.
+
+### 4-4. 컨테이너 이미지 빌드
+
+```bash
 gcloud builds submit \
   --tag us-docker.pkg.dev/cellular-client-310600/hanssem-etl/hanssem-macro-dashboard:latest
 ```
 
-## 4. Cloud Run Job 생성
+## 5. Cloud Run Job 생성
 
-Cloud Run Job은 기존 컨테이너 이미지를 기준으로 생성합니다. 공식 문서 기준 `gcloud run jobs create JOB_NAME --image IMAGE_URL` 형식입니다.
-
-예시:
+### 5-1. 최소 버전
 
 ```bash
 gcloud run jobs create hanssem-macro-etl \
@@ -71,24 +102,37 @@ gcloud run jobs create hanssem-macro-etl \
   --task-timeout 3600s \
   --set-env-vars BQ_PROJECT_ID=cellular-client-310600,BQ_DATASET=Yunjae_Workspace,BQ_LOCATION=US \
   --set-env-vars KOSIS_API_KEY=YOUR_KOSIS_API_KEY,RONE_API_KEY=YOUR_RONE_API_KEY \
-  --set-env-vars ECOS_API_KEY=,DATA_GO_KR_API_KEY=
+  --set-env-vars ECOS_API_KEY=YOUR_ECOS_API_KEY,DATA_GO_KR_API_KEY=YOUR_DATA_GO_KR_API_KEY
 ```
 
-권장:
+### 5-2. 추천
 
-- API 키는 장기적으로 `--set-secrets`로 Secret Manager에 연결
-- `ECOS_API_KEY`, `DATA_GO_KR_API_KEY`를 확보한 뒤 업데이트
+실제 운영에서는 API 키를 `--set-env-vars` 대신 `Secret Manager`로 넘기는 편이 더 안전합니다.
+하지만 첫 세팅은 위 방식이 가장 단순합니다.
 
-## 5. Cloud Scheduler 생성
+## 6. Job 수동 테스트
 
-Cloud Scheduler는 Cloud Run Job 실행 API를 주기적으로 호출합니다. 공식 문서 기준 `gcloud scheduler jobs create http`를 사용하고, Google API 대상이므로 OAuth 서비스 계정을 씁니다.
+스케줄 걸기 전에 먼저 사람이 직접 한 번 실행합니다.
 
-예시:
+```bash
+gcloud run jobs execute hanssem-macro-etl --region us-central1 --wait
+```
+
+성공하면 BigQuery에 새 `run_id`가 들어갑니다.
+
+## 7. Cloud Scheduler 생성
+
+### 7-1. 프로젝트 번호 확인
 
 ```bash
 PROJECT_ID=cellular-client-310600
 PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')
+echo $PROJECT_NUMBER
+```
 
+### 7-2. 매일 오전 9시 실행 스케줄 생성
+
+```bash
 gcloud scheduler jobs create http hanssem-macro-etl-daily \
   --location us-central1 \
   --schedule "0 9 * * *" \
@@ -98,48 +142,68 @@ gcloud scheduler jobs create http hanssem-macro-etl-daily \
   --oauth-service-account-email "${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
 ```
 
-이 예시는 매일 오전 9시(Asia/Seoul)에 ETL을 실행합니다.
+의미:
 
-## 6. 수동 테스트
+- 매일
+- 한국시간 오전 9시
+- `hanssem-macro-etl` Cloud Run Job 실행
 
-Cloud Run Job을 먼저 수동으로 실행해보는 것이 좋습니다.
-
-```bash
-gcloud run jobs execute hanssem-macro-etl --region us-central1 --wait
-```
-
-Scheduler도 즉시 실행해볼 수 있습니다.
+## 8. Scheduler 수동 테스트
 
 ```bash
 gcloud scheduler jobs run hanssem-macro-etl-daily --location us-central1
 ```
 
-## 7. 성공 확인
+## 9. 성공 확인
 
-BigQuery에서 아래 쿼리로 적재 상태를 확인합니다.
+### 9-1. BigQuery 적재 상태
 
 ```sql
-SELECT indicator_id, COUNT(*) AS cnt
+SELECT
+  indicator_id,
+  COUNT(*) AS cnt,
+  MAX(date) AS latest_date
 FROM `cellular-client-310600.Yunjae_Workspace.macro_indicator_observations`
 GROUP BY indicator_id
 ORDER BY indicator_id;
 ```
 
+### 9-2. ETL 실행 이력
+
 ```sql
-SELECT run_id, indicator_id, stage_status, rows_loaded, latest_period
+SELECT
+  run_id,
+  indicator_id,
+  stage_status,
+  rows_loaded,
+  latest_period,
+  started_at,
+  finished_at
 FROM `cellular-client-310600.Yunjae_Workspace.etl_run_history`
 ORDER BY started_at DESC, indicator_id;
 ```
 
-## 8. Tableau 연결 대상
+## 10. 권한 참고
 
-- `vw_hanssem_macro_hmi`
-- `vw_macro_sales_join`
-- `vw_etl_status_summary`
-- `vw_source_health`
+실제로는 아래 권한이 필요할 수 있습니다.
 
-## 참고 문서
+- Cloud Build 관련 권한
+- Artifact Registry Writer / Reader
+- Cloud Run Admin
+- Cloud Scheduler Admin
+- Service Account User
+- BigQuery Job User / Data Editor
 
-- Cloud Run Job 생성: https://cloud.google.com/run/docs/create-jobs
-- Cloud Run Job 스케줄 실행: https://cloud.google.com/run/docs/execute/jobs-on-schedule
-- Cloud Scheduler HTTP job: https://docs.cloud.google.com/sdk/gcloud/reference/scheduler/jobs/create/http
+조직 정책에 따라 별도 승인이나 관리자 지원이 필요할 수 있습니다.
+
+## 11. 권장 운영 흐름
+
+```text
+코드 수정
+-> GitHub push
+-> Cloud Build로 새 이미지 빌드
+-> Cloud Run Job은 latest 이미지 사용
+-> Scheduler는 기존 Job을 계속 호출
+```
+
+즉, 스케줄은 한 번 만들고, 이후에는 이미지 재배포만 반복하면 됩니다.
