@@ -37,7 +37,19 @@ def import_bigquery():
 
 def get_bq_client(project_id: str | None = None):
     bigquery = import_bigquery()
-    return bigquery.Client(project=project_id or BIGQUERY_PROJECT_ID or None)
+    target_project = project_id or BIGQUERY_PROJECT_ID or None
+    try:
+        import google.auth
+
+        credentials, detected_project = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
+        )
+        return bigquery.Client(
+            project=target_project or detected_project,
+            credentials=credentials,
+        )
+    except Exception:
+        return bigquery.Client(project=target_project)
 
 
 def table_id(table_name: str, project_id: str | None = None, dataset: str | None = None) -> str:
