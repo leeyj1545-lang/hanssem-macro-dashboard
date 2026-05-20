@@ -17,6 +17,26 @@ DEFAULT_STATBL_IDS = {
 DEFAULT_REGION_NAME = "전국"
 DEFAULT_REGION_CLS_ID = "500001"
 DEFAULT_ITEM_ID = "100001"
+VALID_RONE_REGIONS = {
+    DEFAULT_REGION_NAME,
+    "서울",
+    "부산",
+    "대구",
+    "인천",
+    "광주",
+    "대전",
+    "울산",
+    "세종",
+    "경기",
+    "강원",
+    "충북",
+    "충남",
+    "전북",
+    "전남",
+    "경북",
+    "경남",
+    "제주",
+}
 
 
 class RoneSource:
@@ -235,6 +255,8 @@ class RoneSource:
         if "CLS_ID" in frame.columns:
             region_series = region_series.where(frame["CLS_ID"].astype(str) != str(region_cls_id), DEFAULT_REGION_NAME)
         frame["region"] = region_series
+        if include_all_regions:
+            frame = frame[frame["region"].isin(VALID_RONE_REGIONS)].copy()
         dedupe_keys = ["date", "region"] if include_all_regions else ["date"]
         frame = frame.sort_values(dedupe_keys).drop_duplicates(subset=dedupe_keys, keep="last")
 
