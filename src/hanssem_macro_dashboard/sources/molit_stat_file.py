@@ -515,6 +515,13 @@ class MolitStatFileSource:
                             "source": "MOLIT_STAT_FILE",
                         }
                     )
+        if rows:
+            deduped = (
+                pd.DataFrame(rows)
+                .groupby(["indicator_id", "date", "region", "unit", "source"], as_index=False)["value"]
+                .max()
+            )
+            rows = deduped.to_dict(orient="records")
         combined = self.standardized_frame(rows)
         return combined[combined["indicator_id"] == "unsold_units"].reset_index(drop=True)
 
