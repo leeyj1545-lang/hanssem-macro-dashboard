@@ -23,6 +23,52 @@ NATIONWIDE = "전국"
 MONTHLY_POSTING_MARKER = "홈페이지게시용"
 
 
+VALID_UNSOLD_REGIONS = {
+    NATIONWIDE,
+    "전국",
+    "서울",
+    "부산",
+    "대구",
+    "인천",
+    "광주",
+    "대전",
+    "울산",
+    "세종",
+    "경기",
+    "강원",
+    "충북",
+    "충남",
+    "전북",
+    "전남",
+    "경북",
+    "경남",
+    "제주",
+    "수도권",
+    "지방",
+}
+VALID_MOLIT_REGIONS = {
+    NATIONWIDE,
+    "전국",
+    "서울",
+    "부산",
+    "대구",
+    "인천",
+    "광주",
+    "대전",
+    "울산",
+    "세종",
+    "경기",
+    "강원",
+    "충북",
+    "충남",
+    "전북",
+    "전남",
+    "경북",
+    "경남",
+    "제주",
+}
+
+
 def raw_dir_for(indicator_id: str) -> Path:
     return RAW_BASE_DIR / indicator_id
 
@@ -180,7 +226,7 @@ class MolitStatFileSource:
         rows: list[dict] = []
         for record in data:
             period_text = str(record.get("0", "")).strip()
-            region = self.clean_region(str(record.get("3", "")).strip())
+            region = self.clean_region(str(record.get("3", "")).strip(), valid_regions=VALID_MOLIT_REGIONS)
             value = self.safe_float(record.get(value_key))
             parsed_period = self.parse_molit_period_label(period_text)
             if parsed_period is None or not region or value is None:
@@ -366,7 +412,7 @@ class MolitStatFileSource:
 
             region_start = header_row_idx + 3
             for row_idx in range(region_start, len(sheet)):
-                region = self.clean_region(sheet.iat[row_idx, 0])
+                region = self.clean_region(sheet.iat[row_idx, 0], valid_regions=VALID_MOLIT_REGIONS)
                 if not region:
                     continue
                 rows.extend(
@@ -410,7 +456,7 @@ class MolitStatFileSource:
 
             row_idx = header_row_idx + 3
             while row_idx < len(sheet):
-                region = self.clean_region(sheet.iat[row_idx, 0])
+                region = self.clean_region(sheet.iat[row_idx, 0], valid_regions=VALID_MOLIT_REGIONS)
                 if not region:
                     row_idx += 1
                     continue
@@ -444,7 +490,10 @@ class MolitStatFileSource:
 
             header_row = sheet.iloc[header_row_idx].tolist()
             for row_idx in range(header_row_idx + 1, len(sheet)):
-                region = self.clean_region(sheet.iat[row_idx, 0] if sheet.shape[1] > 0 else None)
+                region = self.clean_region(
+                    sheet.iat[row_idx, 0] if sheet.shape[1] > 0 else None,
+                    valid_regions=VALID_UNSOLD_REGIONS,
+                )
                 if not region:
                     continue
                 row_values = sheet.iloc[row_idx].tolist()
@@ -703,15 +752,27 @@ class MolitStatFileSource:
             return first in {"누계", "(누계)", "계", "총계"}
         return second in {"누계", "(누계)", "계", "총계"}
 
-    def clean_region(self, value) -> str | None:
+    def normalize_region_label(self, value) -> str:
+        text = re.sub(r"\s+", "", str(value)).strip()
+        if text == "전국계":
+            return NATIONWIDE
+        if text == "강원도":
+            return "강원"
+        if text == "제주도":
+            return "제주"
+        return text
+
+    def clean_region(self, value, valid_regions: set[str] | None = None) -> str | None:
         if pd.isna(value):
             return None
-        text = str(value).strip()
+        text = self.normalize_region_label(value)
         if not text:
             return None
-        if text in {"구분", "전월계", "(전월계)", "누계", "(누계)", "계", "총계"}:
+        if text in {"구분", "전월계", "(전월계)", "누계", "(누계)", "계", "총계", "공공부문", "민간부문"}:
             return None
         if text.startswith("("):
+            return None
+        if valid_regions is not None and text not in valid_regions:
             return None
         return text
 
