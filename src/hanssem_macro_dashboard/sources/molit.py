@@ -82,7 +82,16 @@ class MolitTransactionSource(BaseSource):
             raise SourceError("DATA_GO_KR_API_KEY is missing.")
         response = requests.get(
             base_url,
-            params={"serviceKey": self.api_key, "LAWD_CD": lawd_code, "DEAL_YMD": deal_ymd},
+            # The transaction APIs paginate item rows. We only need the total
+            # transaction count for the month/region, so request the first page
+            # and read totalCount instead of counting the returned items.
+            params={
+                "serviceKey": self.api_key,
+                "LAWD_CD": lawd_code,
+                "DEAL_YMD": deal_ymd,
+                "pageNo": 1,
+                "numOfRows": 1,
+            },
             timeout=self.timeout,
         )
         response.raise_for_status()
@@ -95,6 +104,12 @@ class MolitTransactionSource(BaseSource):
                 f"MOLIT transaction API error resultCode={normalized_result_code} resultMsg={result_msg} "
                 f"lawd_code={lawd_code} deal_ymd={deal_ymd}"
             )
+        total_count = root.findtext(".//totalCount", default="").strip()
+        if total_count:
+            try:
+                return int(total_count)
+            except ValueError:
+                pass
         items = root.findall(".//item")
         return len(items)
 

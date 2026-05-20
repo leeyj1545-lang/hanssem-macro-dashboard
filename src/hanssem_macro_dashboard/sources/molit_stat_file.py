@@ -664,9 +664,37 @@ class MolitStatFileSource:
         frame = frame.dropna(subset=["date", "value", "region"])
         frame["region"] = frame["region"].replace({"전국계": NATIONWIDE, "총계": NATIONWIDE})
         frame = frame.drop_duplicates(subset=["indicator_id", "date", "region"], keep="last")
+        frame = self.ensure_nationwide_rows(frame)
         frame = frame.sort_values(["indicator_id", "date", "region"]).reset_index(drop=True)
         frame["date"] = frame["date"].dt.strftime("%Y-%m-%d")
         return frame
+
+    def ensure_nationwide_rows(self, frame: pd.DataFrame) -> pd.DataFrame:
+        if frame.empty:
+            return frame
+
+        nationwide_rows: list[dict] = []
+        grouped = frame.groupby(["indicator_id", "date"], dropna=False)
+        for (indicator_id, observed_at), group in grouped:
+            if (group["region"] == NATIONWIDE).any():
+                continue
+
+            regional_group = group[group["region"] != NATIONWIDE]
+            if regional_group.empty:
+                continue
+
+            template = regional_group.iloc[0].to_dict()
+            template["indicator_id"] = indicator_id
+            template["date"] = observed_at
+            template["region"] = NATIONWIDE
+            template["value"] = float(regional_group["value"].sum())
+            nationwide_rows.append(template)
+
+        if not nationwide_rows:
+            return frame
+
+        combined = pd.concat([frame, pd.DataFrame(nationwide_rows)], ignore_index=True)
+        return combined.drop_duplicates(subset=["indicator_id", "date", "region"], keep="last")
 
     def find_month_columns(self, sheet: pd.DataFrame) -> tuple[int | None, list[tuple[int, int]]]:
         for row_idx in range(min(6, len(sheet))):
