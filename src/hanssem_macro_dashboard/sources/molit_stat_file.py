@@ -438,37 +438,34 @@ class MolitStatFileSource:
             if sheet.empty or sheet.shape[0] < 5:
                 continue
 
-            target_row_idx = self.find_row_index(sheet, {"계", NATIONWIDE, "전국계"})
-            if target_row_idx is None:
-                target_row_idx = 4 if len(sheet) > 4 else None
-            if target_row_idx is None:
-                continue
-
             header_row_idx = self.find_best_period_header_row(sheet)
             if header_row_idx is None:
                 continue
 
             header_row = sheet.iloc[header_row_idx].tolist()
-            total_row = sheet.iloc[target_row_idx].tolist()
-
-            for col_idx, header in enumerate(header_row[1:], start=1):
-                parsed = self.parse_compact_period(str(header).strip())
-                if parsed is None:
+            for row_idx in range(header_row_idx + 1, len(sheet)):
+                region = self.clean_region(sheet.iat[row_idx, 0] if sheet.shape[1] > 0 else None)
+                if not region:
                     continue
-                year, month = parsed
-                total_value = self.safe_float(total_row[col_idx] if col_idx < len(total_row) else None)
-                if total_value is None:
-                    continue
-                rows.append(
-                    {
-                        "indicator_id": "unsold_units",
-                        "date": f"{year:04d}-{month:02d}-01",
-                        "region": NATIONWIDE,
-                        "value": total_value,
-                        "unit": "호",
-                        "source": "MOLIT_STAT_FILE",
-                    }
-                )
+                row_values = sheet.iloc[row_idx].tolist()
+                for col_idx, header in enumerate(header_row[1:], start=1):
+                    parsed = self.parse_compact_period(str(header).strip())
+                    if parsed is None:
+                        continue
+                    year, month = parsed
+                    value = self.safe_float(row_values[col_idx] if col_idx < len(row_values) else None)
+                    if value is None:
+                        continue
+                    rows.append(
+                        {
+                            "indicator_id": "unsold_units",
+                            "date": f"{year:04d}-{month:02d}-01",
+                            "region": region,
+                            "value": value,
+                            "unit": "호",
+                            "source": "MOLIT_STAT_FILE",
+                        }
+                    )
         combined = self.standardized_frame(rows)
         return combined[combined["indicator_id"] == "unsold_units"].reset_index(drop=True)
 
@@ -576,9 +573,8 @@ class MolitStatFileSource:
     def to_observation_rows(self, indicator_id: str, standardized: pd.DataFrame) -> list[dict]:
         definition = INDICATORS[indicator_id]
         fallback = definition.fallback_source
-        nationwide = standardized[standardized["region"] == NATIONWIDE].copy()
         rows: list[dict] = []
-        for row in nationwide.to_dict(orient="records"):
+        for row in standardized.to_dict(orient="records"):
             meta = {
                 "provider": "MOLIT_STAT",
                 "fallback": True,
@@ -599,7 +595,7 @@ class MolitStatFileSource:
                     "indicator_name": definition.name_kr,
                     "bucket": definition.category,
                     "observation_date": row["date"],
-                    "region_code": "KR",
+                    "region_code": "KR" if row["region"] == NATIONWIDE else row["region"],
                     "region_name": row["region"],
                     "frequency": definition.frequency,
                     "unit": row["unit"],

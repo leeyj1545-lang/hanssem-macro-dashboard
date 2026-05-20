@@ -166,6 +166,7 @@ class RoneSource:
                     region_name=candidate["region_name"],
                     region_cls_id=candidate.get("region_cls_id"),
                     item_id=candidate.get("item_id"),
+                    include_all_regions=True,
                 )
                 if not standardized.empty:
                     return self.to_observation_rows(indicator_id=indicator_id, standardized=standardized, candidate=candidate)
@@ -197,6 +198,7 @@ class RoneSource:
         region_name: str = DEFAULT_REGION_NAME,
         region_cls_id: str | None = DEFAULT_REGION_CLS_ID,
         item_id: str | None = DEFAULT_ITEM_ID,
+        include_all_regions: bool = False,
     ) -> pd.DataFrame:
         if not rows:
             return pd.DataFrame(columns=["indicator_id", "date", "region", "value", "unit", "source"])
@@ -206,14 +208,15 @@ class RoneSource:
         if not required.issubset(frame.columns):
             return pd.DataFrame(columns=["indicator_id", "date", "region", "value", "unit", "source"])
 
-        if region_cls_id and "CLS_ID" in frame.columns:
-            region_filtered = frame[frame["CLS_ID"].astype(str) == str(region_cls_id)].copy()
-            if not region_filtered.empty:
-                frame = region_filtered
+        if not include_all_regions:
+            if region_cls_id and "CLS_ID" in frame.columns:
+                region_filtered = frame[frame["CLS_ID"].astype(str) == str(region_cls_id)].copy()
+                if not region_filtered.empty:
+                    frame = region_filtered
+                else:
+                    frame = frame[frame["CLS_NM"].astype(str).str.strip() == region_name].copy()
             else:
                 frame = frame[frame["CLS_NM"].astype(str).str.strip() == region_name].copy()
-        else:
-            frame = frame[frame["CLS_NM"].astype(str).str.strip() == region_name].copy()
 
         if item_id and "ITM_ID" in frame.columns:
             item_filtered = frame[frame["ITM_ID"].astype(str) == str(item_id)].copy()
@@ -228,17 +231,18 @@ class RoneSource:
         frame["date"] = pd.to_datetime(date_token + "01", format="%Y%m%d", errors="coerce")
         frame["value"] = pd.to_numeric(frame["DTA_VAL"], errors="coerce")
         frame = frame.dropna(subset=["date", "value"])
-        frame = frame.sort_values("date").drop_duplicates(subset=["date"], keep="last")
-
         region_series = frame["CLS_NM"].astype(str).str.strip()
-        if region_cls_id and "CLS_ID" in frame.columns:
+        if "CLS_ID" in frame.columns:
             region_series = region_series.where(frame["CLS_ID"].astype(str) != str(region_cls_id), DEFAULT_REGION_NAME)
+        frame["region"] = region_series
+        dedupe_keys = ["date", "region"] if include_all_regions else ["date"]
+        frame = frame.sort_values(dedupe_keys).drop_duplicates(subset=dedupe_keys, keep="last")
 
         standardized = pd.DataFrame(
             {
                 "indicator_id": indicator_id,
                 "date": frame["date"].dt.strftime("%Y-%m-%d"),
-                "region": region_series,
+                "region": frame["region"],
                 "value": frame["value"].astype(float),
                 "unit": frame["UI_NM"].fillna(INDICATORS[indicator_id].unit),
                 "source": "R-ONE",
@@ -256,7 +260,7 @@ class RoneSource:
                     "indicator_name": definition.name_kr,
                     "bucket": definition.category,
                     "observation_date": row["date"],
-                    "region_code": "KR",
+                    "region_code": "KR" if row["region"] == DEFAULT_REGION_NAME else row["region"],
                     "region_name": row["region"],
                     "frequency": definition.frequency,
                     "unit": row["unit"],

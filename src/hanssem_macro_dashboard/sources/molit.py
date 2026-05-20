@@ -35,6 +35,9 @@ class MolitTransactionSource(BaseSource):
         self.end_month = end_month or date.today().strftime("%Y%m")
         self.timeout = timeout
 
+    def _region_name(self, lawd_code: str) -> str:
+        return lawd_code
+
     def _month_range(self) -> list[str]:
         year = int(self.start_month[:4])
         month = int(self.start_month[4:6])
@@ -72,21 +75,21 @@ class MolitTransactionSource(BaseSource):
 
     def fetch(self) -> Iterable[dict]:
         months = self._month_range()
-        trade_counter: Counter[str] = Counter()
-        rent_counter: Counter[str] = Counter()
+        trade_counter: Counter[tuple[str, str]] = Counter()
+        rent_counter: Counter[tuple[str, str]] = Counter()
         trade_definition = INDICATORS["apt_trade_volume"]
         rent_definition = INDICATORS["apt_rent_volume"]
 
         for month in months:
             for lawd_code in self.lawd_codes:
                 if "apt_trade_volume" in self.indicator_ids:
-                    trade_counter[month] += self._fetch_xml_count(self.trade_url, lawd_code, month)
+                    trade_counter[(month, lawd_code)] += self._fetch_xml_count(self.trade_url, lawd_code, month)
                 if "apt_rent_volume" in self.indicator_ids:
-                    rent_counter[month] += self._fetch_xml_count(self.rent_url, lawd_code, month)
+                    rent_counter[(month, lawd_code)] += self._fetch_xml_count(self.rent_url, lawd_code, month)
 
         rows: list[dict] = []
         if "apt_trade_volume" in self.indicator_ids:
-            for month, value in sorted(trade_counter.items()):
+            for (month, lawd_code), value in sorted(trade_counter.items()):
                 rows.append(
                     {
                         "indicator_code": trade_definition.indicator_id,
@@ -95,20 +98,20 @@ class MolitTransactionSource(BaseSource):
                         "source": trade_definition.source,
                         "source_series_code": trade_definition.source_series_code,
                         "frequency": trade_definition.frequency,
-                        "region_code": trade_definition.region_code,
-                        "region_name": trade_definition.region,
+                        "region_code": lawd_code,
+                        "region_name": self._region_name(lawd_code),
                         "observation_date": f"{month[:4]}-{month[4:6]}-01",
                         "value": float(value),
                         "unit": trade_definition.unit,
                         "meta_json": {
-                            "lawd_codes": self.lawd_codes,
+                            "lawd_code": lawd_code,
                             "direction": trade_definition.direction,
                             "hanssem_logic": trade_definition.hanssem_logic,
                         },
                     }
                 )
         if "apt_rent_volume" in self.indicator_ids:
-            for month, value in sorted(rent_counter.items()):
+            for (month, lawd_code), value in sorted(rent_counter.items()):
                 rows.append(
                     {
                         "indicator_code": rent_definition.indicator_id,
@@ -117,13 +120,13 @@ class MolitTransactionSource(BaseSource):
                         "source": rent_definition.source,
                         "source_series_code": rent_definition.source_series_code,
                         "frequency": rent_definition.frequency,
-                        "region_code": rent_definition.region_code,
-                        "region_name": rent_definition.region,
+                        "region_code": lawd_code,
+                        "region_name": self._region_name(lawd_code),
                         "observation_date": f"{month[:4]}-{month[4:6]}-01",
                         "value": float(value),
                         "unit": rent_definition.unit,
                         "meta_json": {
-                            "lawd_codes": self.lawd_codes,
+                            "lawd_code": lawd_code,
                             "direction": rent_definition.direction,
                             "hanssem_logic": rent_definition.hanssem_logic,
                         },
